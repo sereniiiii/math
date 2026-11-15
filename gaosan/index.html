@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#1b3a5c" />
+<title>高三数学知识点清单</title>
+<meta name="description" content="新高考数学全部模块知识点：核心结论、关键公式、易错提醒、典型例题。可勾选已掌握，自动记录进度。" />
+<link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <h1>高三数学 · 知识点清单</h1>
+    <div class="progress" aria-hidden="true">
+      <div class="bar"><i id="bar"></i></div>
+      <span id="pct">0%</span>
+    </div>
+  </div>
+
+  <div class="tools">
+    <input id="q" type="search" placeholder="搜知识点 / 公式 / 易错点…" autocomplete="off" />
+    <label class="switch">
+      <input id="onlyTodo" type="checkbox" />
+      <span>只看没掌握的</span>
+    </label>
+    <button id="reset" class="ghost" type="button">清空进度</button>
+  </div>
+
+  <nav id="tabs" class="tabs"></nav>
+</header>
+
+<main id="list"></main>
+
+<footer class="foot">
+  <p>点方块打勾 → 自动存本地，换设备不同步。总数 <b id="total">0</b> 条。</p>
+</footer>
+
+<script src="assets/data.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

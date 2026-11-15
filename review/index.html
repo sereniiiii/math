@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f7f4ee">
+<meta name="description" content="高三数学错题本：抄进题目自动归到对应知识点，数据自己备份。">
+<title>数学错题本 · 高三复习</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <h1>数学错题本</h1>
+      <span class="sub" id="sub">高三</span>
+    </div>
+    <button class="icon-btn" id="btnBackup" type="button">备份</button>
+  </div>
+  <p class="statline" id="statline"></p>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button class="tab on" type="button" data-view="kp">知识点</button>
+  <button class="tab" type="button" data-view="add">＋ 记错题</button>
+  <button class="tab" type="button" data-view="list">错题本<i class="dot" id="cntList"></i></button>
+</nav>
+
+<main>
+
+  <!-- ========== 概览 / 知识点分类 ========== -->
+  <section class="view" id="view-kp">
+    <div class="overview" id="overview"></div>
+
+    <div class="searchbar">
+      <input id="q" type="search" placeholder="搜知识点、公式、易错点" autocomplete="off">
+    </div>
+
+    <div class="chips">
+      <label class="chip"><input type="checkbox" id="onlyWrong"> 只看有错题的</label>
+      <button class="chip-btn" type="button" id="toggleAll">全部展开</button>
+    </div>
+
+    <div id="kpList"></div>
+  </section>
+
+  <!-- ========== 记一道错题 ========== -->
+  <section class="view hide" id="view-add">
+    <form id="addForm" autocomplete="off">
+      <label class="field">
+        <span class="lab">题干 <b class="req">*</b></span>
+        <textarea id="fQ" rows="5" placeholder="把题目抄进来，或只写「我错在哪」：&#10;例：已知 f(x)=x³−3x²+2，求单调区间与极值"></textarea>
+      </label>
+
+      <div class="sug-box" id="sugBox" hidden>
+        <p class="sug-head">自动判断属于（点一个确认，可改）</p>
+        <div class="sug-list" id="sugList"></div>
+      </div>
+
+      <label class="field">
+        <span class="lab">归属知识点</span>
+        <select id="fKp"></select>
+      </label>
+
+      <div class="field">
+        <span class="lab">错在哪</span>
+        <div class="why-list" id="whyList"></div>
+      </div>
+
+      <div class="field">
+        <span class="lab">来源</span>
+        <input id="fSrc" placeholder="2026 一模 / 五三 P32 / 周测三" type="text">
+      </div>
+
+      <label class="field">
+        <span class="lab">备注</span>
+        <input id="fNote" placeholder="当时卡在哪一步（可选）" type="text">
+      </label>
+
+      <button class="primary" type="submit">存进错题本</button>
+      <p class="tip">错题只存在这台设备的浏览器里。换手机或清缓存前，用右上角「备份」先导出。</p>
+    </form>
+  </section>
+
+  <!-- ========== 错题本 ========== -->
+  <section class="view hide" id="view-list">
+    <div class="searchbar">
+      <input id="q2" type="search" placeholder="搜题干、备注" autocomplete="off">
+    </div>
+    <div class="chips">
+      <label class="chip"><input type="checkbox" id="onlyTodo"> 只看待解决</label>
+      <select id="fKpFilter" class="mini-select"></select>
+    </div>
+    <div id="misList"></div>
+  </section>
+
+</main>
+
+<!-- 知识点详情抽屉 -->
+<div class="sheet" id="sheet" hidden>
+  <div class="sheet-mask" data-close="1"></div>
+  <div class="sheet-body" id="sheetBody" role="dialog" aria-modal="true"></div>
+</div>
+
+<!-- 备份弹窗 -->
+<div class="modal" id="modal" hidden>
+  <div class="modal-in" role="dialog" aria-modal="true">
+    <h2>备份与恢复</h2>
+    <p class="muted">错题和进度只存在这台设备的浏览器里。<b>换手机、清缓存、换浏览器之前，一定要先导出。</b></p>
+    <button class="primary" type="button" id="btnExport">导出 JSON 文件</button>
+    <button class="ghost" type="button" id="btnImport">从文件导入</button>
+    <input type="file" id="fileIn" accept=".json,application/json" hidden>
+    <div id="importBar" class="import-bar" hidden></div>
+    <div class="danger-zone">
+      <button class="danger" type="button" id="btnClear">清空全部错题</button>
+    </div>
+    <button class="ghost" type="button" id="btnCloseModal">关闭</button>
+  </div>
+</div>
+
+<script src="assets/data.js"></script>
+<script src="assets/classify.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>

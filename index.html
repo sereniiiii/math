@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f7f4ee">
+<title>高三数学 · 知识点与错题本</title>
+<style>
+  :root { --bg:#f7f4ee; --card:#fffdf9; --line:#e6e1d7; --brand:#1b3a5c; --ink:#1c1c1e; --ink-3:#86868b; --warn:#b4552d; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin:0; min-height:100vh; padding:48px 18px calc(40px + env(safe-area-inset-bottom));
+    background:var(--bg); color:var(--ink);
+    font:15px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+    display:flex; flex-direction:column; align-items:center;
+  }
+  header { text-align:center; margin-bottom:26px; max-width:520px; }
+  h1 { margin:0 0 6px; font-size:22px; color:var(--brand); letter-spacing:.5px; }
+  header p { margin:0; font-size:13px; color:var(--ink-3); }
+  .cards { width:100%; max-width:520px; display:grid; gap:14px; }
+  a.card {
+    display:block; text-decoration:none; color:inherit;
+    background:var(--card); border:1px solid var(--line); border-radius:16px;
+    padding:18px 18px 16px; transition:transform .14s ease, box-shadow .14s ease;
+  }
+  a.card:active { transform:scale(.99); }
+  @media (hover:hover) { a.card:hover { box-shadow:0 6px 22px rgba(27,58,92,.09); transform:translateY(-1px); } }
+  .card h2 { margin:0 0 4px; font-size:16.5px; color:var(--brand); }
+  .card p { margin:0; font-size:13px; color:var(--ink-3); line-height:1.6; }
+  .card .go { display:inline-block; margin-top:10px; font-size:13px; color:var(--brand); font-weight:600; }
+  .tag { display:inline-block; font-size:11px; color:var(--warn); background:#fdf3ec; border-radius:6px; padding:1px 7px; margin-left:6px; vertical-align:2px; }
+  footer { margin-top:26px; font-size:12px; color:var(--ink-3); text-align:center; line-height:1.8; }
+</style>
+</head>
+<body>
+<header>
+  <h1>高三数学</h1>
+  <p>知识点清单 · 错题本</p>
+</header>
+
+<div class="cards">
+  <a class="card" href="gaosan/">
+    <h2>知识点清单</h2>
+    <p>按模块分类的全部考点：核心定义、必背公式、易错点、例题。可勾「已掌握」看进度。</p>
+    <span class="go">打开 →</span>
+  </a>
+  <a class="card" href="review/">
+    <h2>错题本<span class="tag">自动归类</span></h2>
+    <p>把错题抄进来，自动判断属于哪个知识点；按知识点汇总，可标「已弄懂」，支持导出备份。</p>
+    <span class="go">打开 →</span>
+  </a>
+</div>
+
+<footer>
+  两个页面都在手机上用，建议 Safari 分享 →「添加到主屏幕」。<br>
+  进度和错题存在各自设备的浏览器里，换设备请先导出。
+</footer>
+</body>
+</html>
