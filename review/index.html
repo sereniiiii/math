@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#f7f4ee">
-<meta name="description" content="高三数学错题本：抄进题目自动归到对应知识点，数据自己备份。">
+<meta name="theme-color" content="#171c24">
+<meta name="description" content="高三数学错题本：拍一张卷子自动切成多道题，每题归到对应知识点，数据自己备份。">
 <title>数学错题本 · 高三复习</title>
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
 
-<header class="top">
-  <div class="top-inner">
+<div class="nav">
+  <div class="nav-in">
     <div class="brand">
       <h1>数学错题本</h1>
       <span class="sub" id="sub">高三</span>
@@ -19,11 +19,12 @@
     <button class="icon-btn" id="btnBackup" type="button">备份</button>
   </div>
   <p class="statline" id="statline"></p>
-</header>
+</div>
 
 <nav class="tabs" id="tabs">
   <button class="tab on" type="button" data-view="kp">知识点</button>
   <button class="tab" type="button" data-view="add">＋ 记错题</button>
+  <button class="tab" type="button" data-view="scan">拍照切题</button>
   <button class="tab" type="button" data-view="list">错题本<i class="dot" id="cntList"></i></button>
 </nav>
 
@@ -45,7 +46,7 @@
     <div id="kpList"></div>
   </section>
 
-  <!-- ========== 记一道错题 ========== -->
+  <!-- ========== 手动记一道错题 ========== -->
   <section class="view hide" id="view-add">
     <form id="addForm" autocomplete="off">
       <label class="field">
@@ -83,6 +84,38 @@
     </form>
   </section>
 
+  <!-- ========== 拍照切题 ========== -->
+  <section class="view hide" id="view-scan">
+
+    <div class="panel">
+      <p class="panel-h">拍整张卷子，按空行自动切题</p>
+      <label class="drop" for="fImgs">
+        <b>选图片 / 拍照</b>
+        <span>可一次选多张；正着拍、光线均匀，切得最准</span>
+      </label>
+      <input id="fImgs" type="file" accept="image/*" multiple hidden>
+      <label class="field" style="margin:14px 0 0">
+        <span class="lab">这批题的来源（可选，存的时候一起记）</span>
+        <input id="scanSrc" type="text" placeholder="2026 一模 / 五三 P32 / 周测三">
+      </label>
+      <p class="tip">切得不准，用题块右上角的「合并 / 拆开」微调。图片只保存在这台设备。</p>
+    </div>
+
+    <div class="panel">
+      <p class="panel-h">有电子版文字？直接粘进来</p>
+      <textarea id="fWhole" rows="4" placeholder="把整卷文字粘进来，按「1. 2. 3.」自动切题，归类也更准"></textarea>
+      <button class="ghost" id="btnSplitText" type="button" style="margin:10px 0 0">按题号切分</button>
+    </div>
+
+    <div class="scan-note" id="scanNote" hidden>
+      <span>切出来的每道题，填一句题干关键词就能自动归类；留空就手动选知识点。</span>
+    </div>
+
+    <div id="scanList"></div>
+
+    <button class="primary" id="btnSaveAll" type="button" style="display:none">全部存进错题本</button>
+  </section>
+
   <!-- ========== 错题本 ========== -->
   <section class="view hide" id="view-list">
     <div class="searchbar">
@@ -112,12 +145,16 @@
     <button class="ghost" type="button" id="btnImport">从文件导入</button>
     <input type="file" id="fileIn" accept=".json,application/json" hidden>
     <div id="importBar" class="import-bar" hidden></div>
+    <p class="tip">导出的文件不含题图。换设备后图片题会显示成占位，题干文字仍在。</p>
     <div class="danger-zone">
       <button class="danger" type="button" id="btnClear">清空全部错题</button>
     </div>
     <button class="ghost" type="button" id="btnCloseModal">关闭</button>
   </div>
 </div>
+
+<!-- 图片放大 -->
+<div class="zoom" id="zoom" hidden><img id="zoomImg" alt=""></div>
 
 <script src="assets/data.js"></script>
 <script src="assets/classify.js"></script>

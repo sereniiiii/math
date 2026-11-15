@@ -3,50 +3,144 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#f7f4ee">
+<meta name="theme-color" content="#171c24">
 <title>高三数学 · 知识点与错题本</title>
 <style>
-  :root { --bg:#f7f4ee; --card:#fffdf9; --line:#e6e1d7; --brand:#1b3a5c; --ink:#1c1c1e; --ink-3:#86868b; --warn:#b4552d; }
+  :root {
+    --nav-bg:#171c24; --nav-text:#eef2f8; --nav-dim:#8d99ab;
+    --page-bg:#e3e9f2; --panel:#fff; --panel-2:#f2f6fb;
+    --line:#cfd9e6; --line-2:#e6ecf4;
+    --ink:#10151b; --ink-2:#3b4859; --ink-3:#78859a;
+    --blue:#2a56c6; --blue-deep:#1b3c8f; --blue-soft:#e4ebfa; --warn:#a91f2f;
+    --serif:"Songti SC","Source Han Serif SC","Noto Serif SC",Georgia,serif;
+    --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { min-height: 100%; }
   body {
-    margin:0; min-height:100vh; padding:48px 18px calc(40px + env(safe-area-inset-bottom));
-    background:var(--bg); color:var(--ink);
-    font:15px/1.65 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
-    display:flex; flex-direction:column; align-items:center;
+    margin: 0;
+    min-height: 100vh;
+    background: var(--page-bg);
+    color: var(--ink);
+    font: 15px/1.75 var(--sans);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-bottom: calc(36px + env(safe-area-inset-bottom));
+    -webkit-font-smoothing: antialiased;
   }
-  header { text-align:center; margin-bottom:26px; max-width:520px; }
-  h1 { margin:0 0 6px; font-size:22px; color:var(--brand); letter-spacing:.5px; }
-  header p { margin:0; font-size:13px; color:var(--ink-3); }
-  .cards { width:100%; max-width:520px; display:grid; gap:14px; }
+
+  .nav {
+    width: 100%;
+    background: var(--nav-bg);
+    padding: 26px 18px 22px;
+    margin-bottom: 26px;
+  }
+  .nav-in { max-width: 520px; margin: 0 auto; }
+  h1 {
+    margin: 0;
+    font-family: var(--serif);
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: var(--nav-text);
+  }
+  .nav p {
+    margin: 7px 0 0;
+    font-size: 12.5px;
+    letter-spacing: 1.2px;
+    color: var(--nav-dim);
+  }
+
+  .cards { width: 100%; max-width: 520px; padding: 0 18px; display: grid; gap: 14px; }
+
   a.card {
-    display:block; text-decoration:none; color:inherit;
-    background:var(--card); border:1px solid var(--line); border-radius:16px;
-    padding:18px 18px 16px; transition:transform .14s ease, box-shadow .14s ease;
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px 20px 18px;
+    position: relative;
+    box-shadow: 0 1px 2px rgba(16,21,27,.06), 0 10px 24px rgba(16,21,27,.07);
+    transition: transform .14s ease, box-shadow .14s ease;
   }
-  a.card:active { transform:scale(.99); }
-  @media (hover:hover) { a.card:hover { box-shadow:0 6px 22px rgba(27,58,92,.09); transform:translateY(-1px); } }
-  .card h2 { margin:0 0 4px; font-size:16.5px; color:var(--brand); }
-  .card p { margin:0; font-size:13px; color:var(--ink-3); line-height:1.6; }
-  .card .go { display:inline-block; margin-top:10px; font-size:13px; color:var(--brand); font-weight:600; }
-  .tag { display:inline-block; font-size:11px; color:var(--warn); background:#fdf3ec; border-radius:6px; padding:1px 7px; margin-left:6px; vertical-align:2px; }
-  footer { margin-top:26px; font-size:12px; color:var(--ink-3); text-align:center; line-height:1.8; }
+  a.card::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 18px; bottom: 18px;
+    width: 3px;
+    background: var(--blue-deep);
+    border-radius: 0 2px 2px 0;
+  }
+  a.card:active { transform: scale(.995); }
+  @media (hover:hover) {
+    a.card:hover { box-shadow: 0 2px 4px rgba(16,21,27,.07), 0 16px 34px rgba(16,21,27,.1); transform: translateY(-1px); }
+  }
+  .card h2 {
+    margin: 0 0 6px;
+    font-family: var(--serif);
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: var(--ink);
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .card p { margin: 0; font-size: 13px; color: var(--ink-2); line-height: 1.8; }
+  .card .go {
+    display: inline-block;
+    margin-top: 12px;
+    font-size: 12.5px;
+    letter-spacing: .5px;
+    color: var(--blue-deep);
+    font-weight: 600;
+  }
+  .tag {
+    font-family: var(--sans);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0;
+    color: var(--blue-deep);
+    background: var(--blue-soft);
+    border-radius: 3px;
+    padding: 1px 6px;
+  }
+  .tag.new { color: var(--warn); background: #fbf0f1; }
+
+  footer {
+    max-width: 520px;
+    margin-top: 26px;
+    padding: 0 22px;
+    font-size: 11.5px;
+    line-height: 1.9;
+    letter-spacing: .3px;
+    color: var(--ink-3);
+    text-align: center;
+  }
 </style>
 </head>
 <body>
-<header>
-  <h1>高三数学</h1>
-  <p>知识点清单 · 错题本</p>
-</header>
+
+<div class="nav">
+  <div class="nav-in">
+    <h1>高三数学</h1>
+    <p>知识点清单 · 错题本</p>
+  </div>
+</div>
 
 <div class="cards">
   <a class="card" href="gaosan/">
     <h2>知识点清单</h2>
-    <p>按模块分类的全部考点：核心定义、必背公式、易错点、例题。可勾「已掌握」看进度。</p>
+    <p>北师大版必修一、二与选修一、二的全部考点：核心定义、必背公式、易错点、例题。可勾「已掌握」看整册进度。</p>
     <span class="go">打开 →</span>
   </a>
   <a class="card" href="review/">
-    <h2>错题本<span class="tag">自动归类</span></h2>
-    <p>把错题抄进来，自动判断属于哪个知识点；按知识点汇总，可标「已弄懂」，支持导出备份。</p>
+    <h2>错题本<span class="tag new">拍照切题</span><span class="tag">自动归类</span></h2>
+    <p>拍一张卷子自动切成多道题；抄题或写关键词，自动判断属于哪个知识点。按知识点汇总，可标「已弄懂」，支持导出备份。</p>
     <span class="go">打开 →</span>
   </a>
 </div>
@@ -55,5 +149,6 @@
   两个页面都在手机上用，建议 Safari 分享 →「添加到主屏幕」。<br>
   进度和错题存在各自设备的浏览器里，换设备请先导出。
 </footer>
+
 </body>
 </html>

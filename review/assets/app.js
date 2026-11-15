@@ -1,4 +1,8 @@
-/* 数学错题本 —— 原生 JS，无依赖 */
+/* 数学错题本 —— 原生 JS，无依赖
+   1) 知识点概览 / 折叠 / 详情抽屉
+   2) 手抄一道错题，边打字边自动归类
+   3) 拍照整卷 → 按行间空白切题 → 每题挂知识点（图片存 IndexedDB）
+   4) 错题本按知识点分组、标记已弄懂、导出导入 JSON */
 (function () {
   'use strict';
 
@@ -15,14 +19,22 @@
   ];
 
   /* ---------- 索引 ---------- */
-  var MODS = DATA.map(function (m) { return { id: m.id, name: m.name, items: m.items }; });
-  var KP = {};          // kpId -> {it, modId, modName, modIdx, kpIdx}
+  var MODS = DATA.map(function (m) {
+    return {
+      id: m.id,
+      book: m.book || '',
+      name: m.name,
+      full: (m.book ? m.book + ' · ' : '') + m.name,
+      items: m.items
+    };
+  });
+  var KP = {};          // kpId -> {it, modId, modFull, modName, modIdx, kpIdx}
   MODS.forEach(function (m, mi) {
     m.items.forEach(function (it, ii) {
-      KP[it.id] = { it: it, modId: m.id, modName: m.name, modIdx: mi, kpIdx: ii };
+      KP[it.id] = { it: it, modId: m.id, modName: m.name, modFull: m.full, modIdx: mi, kpIdx: ii };
     });
   });
-  if (CLS) CLS.build(MODS);
+  if (CLS) CLS.build(MODS.map(function (m) { return { id: m.id, name: m.name, items: m.items }; }));
 
   var TOTAL_KP = Object.keys(KP).length;
 
@@ -51,8 +63,73 @@
   }
   load();
 
+  /* ---------- 题图：IndexedDB ---------- */
+  var IMG = (function () {
+    var db = null, broken = false;
+    function open() {
+      return new Promise(function (res, rej) {
+        if (db) return res(db);
+        if (broken || !window.indexedDB) return rej(new Error('no-idb'));
+        var req = indexedDB.open('gsmath-img', 1);
+        req.onupgradeneeded = function () {
+          var d = req.result;
+          if (!d.objectStoreNames.contains('img')) d.createObjectStore('img');
+        };
+        req.onsuccess = function () { db = req.result; res(db); };
+        req.onerror = function () { broken = true; rej(req.error); };
+      });
+    }
+    function put(id, blob) {
+      return open().then(function (d) {
+        return new Promise(function (res, rej) {
+          var tx = d.transaction('img', 'readwrite');
+          tx.objectStore('img').put(blob, id);
+          tx.oncomplete = function () { res(id); };
+          tx.onerror = function () { rej(tx.error); };
+        });
+      });
+    }
+    function get(id) {
+      return open().then(function (d) {
+        return new Promise(function (res, rej) {
+          var tx = d.transaction('img', 'readonly');
+          var rq = tx.objectStore('img').get(id);
+          rq.onsuccess = function () { res(rq.result || null); };
+          rq.onerror = function () { rej(rq.error); };
+        });
+      });
+    }
+    function del(id) {
+      return open().then(function (d) {
+        return new Promise(function (res) {
+          var tx = d.transaction('img', 'readwrite');
+          tx.objectStore('img').delete(id);
+          tx.oncomplete = function () { res(1); };
+          tx.onerror = function () { res(0); };
+        });
+      }).catch(function () { return 0; });
+    }
+    return { put: put, get: get, del: del };
+  })();
+
+  var urlCache = {};
+
+  function hydrateImgs(root) {
+    Array.prototype.forEach.call(root.querySelectorAll('img[data-img]'), function (el) {
+      var id = el.getAttribute('data-img');
+      if (urlCache[id]) { el.src = urlCache[id]; return; }
+      IMG.get(id).then(function (b) {
+        if (!b) { el.classList.add('gone'); el.alt = '题图未随备份迁移'; return; }
+        var u = URL.createObjectURL(b);
+        urlCache[id] = u;
+        el.src = u;
+      }).catch(function () { el.alt = '题图读取失败'; });
+    });
+  }
+
   /* ---------- 工具 ---------- */
   function $(s, r) { return (r || document).querySelector(s); }
+  function $$(s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); }
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -68,7 +145,7 @@
   }
   function stars(n) { return new Array(n + 1).join('★'); }
   function kpTitle(id) { return KP[id] ? KP[id].it.t : '（知识点已不存在）'; }
-  function modName(id) { return KP[id] ? KP[id].modName : ''; }
+  function modName(id) { return KP[id] ? KP[id].modFull : ''; }
   function whyText(k) {
     for (var i = 0; i < WHY.length; i++) if (WHY[i].k === k) return WHY[i].t;
     return '';
@@ -82,16 +159,17 @@
     function p(n) { return n < 10 ? '0' + n : '' + n; }
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
   }
-  function uid() {
-    return 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  function rid(pre) {
+    return (pre || 'x') + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   }
+  function uid() { return rid('m'); }
 
   var toastEl = null, toastTimer = null;
   function toast(msg) {
     if (!toastEl) {
       toastEl = document.createElement('div');
       toastEl.style.cssText = 'position:fixed;left:50%;bottom:calc(26px + env(safe-area-inset-bottom));transform:translateX(-50%);' +
-        'background:rgba(27,58,92,.94);color:#fff;font-size:13px;padding:9px 16px;border-radius:999px;z-index:99;' +
+        'background:rgba(12,17,23,.94);color:#fff;font-size:13px;padding:9px 16px;border-radius:8px;z-index:99;' +
         'max-width:86vw;text-align:center;pointer-events:none;transition:opacity .2s;opacity:0';
       document.body.appendChild(toastEl);
     }
@@ -121,7 +199,7 @@
     $('#sub').textContent = TOTAL_KP + ' 个知识点';
     $('#statline').innerHTML = s.total
       ? '错题 <b>' + s.total + '</b> 道 · 待解决 <i>' + s.todo + '</i> · 已弄懂 <b>' + s.fixed + '</b> · 覆盖 <b>' + s.kps + '</b> 个知识点'
-      : '还没有错题。去「＋ 记错题」抄第一道进来。';
+      : '还没有错题。去「＋ 记错题」抄第一道，或「拍照切题」传一张卷子。';
     var dot = $('#cntList');
     dot.textContent = s.todo || '';
     dot.className = 'dot' + (s.todo ? ' show' : '');
@@ -138,14 +216,14 @@
       '</div>';
 
     if (s.total) {
+      var max = 1;
+      for (var k in s.byMod) if (s.byMod[k] > max) max = s.byMod[k];
       h += '<div class="bars">';
       MODS.forEach(function (m) {
         var c = s.byMod[m.id] || 0;
-        var max = 1;
-        for (var k in s.byMod) if (s.byMod[k] > max) max = s.byMod[k];
         var w = c ? Math.max(6, Math.round(c / max * 100)) : 0;
         h += '<div class="bar-row' + (c ? '' : ' zero') + '" data-jump="' + m.id + '">' +
-          '<span class="bn">' + esc(m.name) + '</span>' +
+          '<span class="bn">' + esc(m.full) + '</span>' +
           '<span class="bt"><i style="width:' + w + '%"></i></span>' +
           '<span class="bc">' + c + '</span></div>';
       });
@@ -164,18 +242,25 @@
     kpKw = $('#q').value.trim();
     var kw = kpKw.toLowerCase();
     var h = '';
+    var lastBook = '';
 
     MODS.forEach(function (m) {
       var items = m.items.filter(function (it) {
         if (onlyWrong && !s.byKp[it.id]) return false;
         if (!kw) return true;
-        var hay = [m.name, it.t, it.core, (it.keys || []).join(' '), it.trap || ''].join(' ').toLowerCase();
+        var hay = [m.full, m.name, it.t, it.core, (it.keys || []).join(' '), it.trap || ''].join(' ').toLowerCase();
         return hay.indexOf(kw) >= 0;
       });
       if (!items.length) return;
 
+      // 册做分组标题，章只显示章名，避免每行重复「必修一 ·」
+      if (m.book !== lastBook) {
+        h += '<p class="book-title">' + esc(m.book || '其他') + '</p>';
+        lastBook = m.book;
+      }
+
       var modWrong = s.byMod[m.id] || 0;
-      var isOpen = openMods[m.id] || (kw && items.length <= 4) || (onlyWrong && true);
+      var isOpen = openMods[m.id] || (kw && items.length <= 4) || onlyWrong;
       h += '<section class="mod' + (isOpen ? ' open' : '') + '" id="mod-' + m.id + '">' +
         '<button class="mod-head" type="button" data-mod="' + m.id + '">' +
         '<span class="mod-name">' + esc(m.name) + '</span>' +
@@ -195,10 +280,27 @@
     $('#kpList').innerHTML = h || '<div class="empty">没有匹配的知识点</div>';
   }
 
+  /* ---------- 错题卡（列表与抽屉共用） ---------- */
+  function misCard(m, kw) {
+    return '<article class="mis' + (m.fixed ? ' done' : '') + '" data-id="' + m.id + '">' +
+      (m.img ? '<img class="mis-img" data-img="' + esc(m.img) + '" data-zoom="1" alt="题图">' : '') +
+      '<p class="mis-q">' + hl(m.q, kw) + '</p>' +
+      '<div class="mis-meta">' +
+      (m.why ? '<span class="tag why">' + esc(whyText(m.why)) + '</span>' : '') +
+      (m.src ? '<span class="tag">' + esc(m.src) + '</span>' : '') +
+      '<span>' + fmtDate(m.ts) + '</span>' +
+      '<span class="mis-acts">' +
+      '<button class="mini' + (m.fixed ? ' on' : '') + '" type="button" data-act="fix">' + (m.fixed ? '已弄懂' : '标为已懂') + '</button>' +
+      '<button class="mini del" type="button" data-act="del">删</button>' +
+      '</span></div>' +
+      (m.note ? '<p class="mis-note">' + hl(m.note, kw) + '</p>' : '') +
+      '</article>';
+  }
+
   /* ---------- 错题本 ---------- */
   function renderList() {
-    var s = stat();
-    var kw = $('#q2').value.trim().toLowerCase();
+    var kwRaw = $('#q2').value.trim();
+    var kw = kwRaw.toLowerCase();
     var onlyTodo = $('#onlyTodo').checked;
     var kpF = $('#fKpFilter').value;
 
@@ -214,11 +316,11 @@
     });
 
     if (!arr.length) {
-      $('#misList').innerHTML = '<div class="empty">' + (store.mistakes.length ? '没有符合筛选条件的错题' : '错题本是空的。点上面「＋ 记错题」开始。') + '</div>';
+      $('#misList').innerHTML = '<div class="empty">' +
+        (store.mistakes.length ? '没有符合筛选条件的错题' : '错题本是空的。点上面「＋ 记错题」或「拍照切题」开始。') + '</div>';
       return;
     }
 
-    // 按知识点分组（模块顺序 → 知识点顺序），便于看到「哪个点反复错」
     var groups = {};
     arr.forEach(function (m) { (groups[m.kp] = groups[m.kp] || []).push(m); });
     var keys = Object.keys(groups).sort(function (a, b) {
@@ -234,23 +336,11 @@
       h += '<div class="mis-group"><p class="mis-group-h">' +
         '<b>' + esc(kpTitle(kid)) + '</b>' +
         '<span>' + esc(modName(kid)) + ' · ' + list.length + ' 道，待解决 ' + todo + '</span></p>';
-      list.forEach(function (m) {
-        h += '<article class="mis' + (m.fixed ? ' done' : '') + '" data-id="' + m.id + '">' +
-          '<p class="mis-q">' + hl(m.q, $('#q2').value.trim()) + '</p>' +
-          '<div class="mis-meta">' +
-          (m.why ? '<span class="tag why">' + esc(whyText(m.why)) + '</span>' : '') +
-          (m.src ? '<span class="tag">' + esc(m.src) + '</span>' : '') +
-          '<span>' + fmtDate(m.ts) + '</span>' +
-          '<span class="mis-acts">' +
-          '<button class="mini' + (m.fixed ? ' on' : '') + '" type="button" data-act="fix">' + (m.fixed ? '已弄懂' : '标为已懂') + '</button>' +
-          '<button class="mini del" type="button" data-act="del">删</button>' +
-          '</span></div>' +
-          (m.note ? '<p class="mis-note">' + hl(m.note, $('#q2').value.trim()) + '</p>' : '') +
-          '</article>';
-      });
+      list.forEach(function (m) { h += misCard(m, kwRaw); });
       h += '</div>';
     });
     $('#misList').innerHTML = h;
+    hydrateImgs($('#misList'));
   }
 
   /* ---------- 知识点详情抽屉 ---------- */
@@ -262,7 +352,7 @@
       .sort(function (a, b) { return (b.ts || 0) - (a.ts || 0); });
 
     var h = '<div class="grab"></div>' +
-      '<p class="sh-mod">' + esc(o.modName) + ' · ' + stars(it.star || 1) + '</p>' +
+      '<p class="sh-mod">' + esc(o.modFull) + ' · ' + stars(it.star || 1) + '</p>' +
       '<h2 class="sh-title">' + esc(it.t) + '</h2>' +
       '<p class="sh-core">' + esc(it.core) + '</p>';
 
@@ -283,21 +373,12 @@
     if (!list.length) {
       h += '<div class="empty" style="padding:18px">还没有记录</div>';
     } else {
-      list.forEach(function (m) {
-        h += '<article class="mis' + (m.fixed ? ' done' : '') + '" data-id="' + m.id + '">' +
-          '<p class="mis-q">' + esc(m.q) + '</p>' +
-          '<div class="mis-meta">' +
-          (m.why ? '<span class="tag why">' + esc(whyText(m.why)) + '</span>' : '') +
-          '<span>' + fmtDate(m.ts) + '</span>' +
-          '<span class="mis-acts">' +
-          '<button class="mini' + (m.fixed ? ' on' : '') + '" type="button" data-act="fix">' + (m.fixed ? '已弄懂' : '标为已懂') + '</button>' +
-          '<button class="mini del" type="button" data-act="del">删</button>' +
-          '</span></div></article>';
-      });
+      list.forEach(function (m) { h += misCard(m, ''); });
     }
     h += '<button class="primary" type="button" id="sheetAdd" style="margin-top:14px">给这个点记一道错题</button>';
 
     $('#sheetBody').innerHTML = h;
+    hydrateImgs($('#sheetBody'));
     $('#sheet').hidden = false;
     document.body.style.overflow = 'hidden';
     $('#sheetAdd').addEventListener('click', function () {
@@ -316,17 +397,16 @@
 
   /* ---------- 视图切换 ---------- */
   function go(v) {
-    var views = { kp: 'view-kp', add: 'view-add', list: 'view-list' };
+    var views = { kp: 'view-kp', add: 'view-add', scan: 'view-scan', list: 'view-list' };
     Object.keys(views).forEach(function (k) { $('#' + views[k]).classList.toggle('hide', k !== v); });
-    Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (b) {
-      b.classList.toggle('on', b.dataset.view === v);
-    });
+    $$('.tab').forEach(function (b) { b.classList.toggle('on', b.dataset.view === v); });
     if (v === 'list') renderList();
     if (v === 'kp') { renderOverview(); renderKp(); }
-    window.scrollTo({ top: 0, behavior: 'instant' in window ? 'instant' : 'auto' });
+    if (v === 'scan') refreshScan();
+    window.scrollTo(0, 0);
   }
 
-  /* ---------- 表单 ---------- */
+  /* ---------- 手动表单 ---------- */
   var manualKp = false;
   var whySel = '';
   var sugTimer = null;
@@ -335,7 +415,7 @@
   function fillKpSelect() {
     var html = '<option value="">— 请选择 —</option>';
     MODS.forEach(function (m) {
-      html += '<optgroup label="' + esc(m.name) + '">';
+      html += '<optgroup label="' + esc(m.full) + '">';
       m.items.forEach(function (it) {
         html += '<option value="' + it.id + '">' + esc(it.t) + '</option>';
       });
@@ -345,11 +425,23 @@
 
     var f = '<option value="">全部知识点</option>';
     MODS.forEach(function (m) {
-      f += '<optgroup label="' + esc(m.name) + '">';
+      f += '<optgroup label="' + esc(m.full) + '">';
       m.items.forEach(function (it) { f += '<option value="' + it.id + '">' + esc(it.t) + '</option>'; });
       f += '</optgroup>';
     });
     $('#fKpFilter').innerHTML = f;
+  }
+
+  function kpOptions(sel) {
+    var html = '<option value="">— 选知识点 —</option>';
+    MODS.forEach(function (m) {
+      html += '<optgroup label="' + esc(m.full) + '">';
+      m.items.forEach(function (it) {
+        html += '<option value="' + it.id + '"' + (sel === it.id ? ' selected' : '') + '>' + esc(it.t) + '</option>';
+      });
+      html += '</optgroup>';
+    });
+    return html;
   }
 
   function renderWhy() {
@@ -364,6 +456,16 @@
     lastSug = [];
   }
 
+  function sugHtml(res, cur) {
+    return res.map(function (r, i) {
+      var on = cur === r.id || (!cur && i === 0);
+      return '<button type="button" class="sug-item' + (on ? ' on' : '') + '" data-kp="' + r.id + '">' +
+        '<span class="si-t">' + esc(r.title) +
+        '<span class="si-hit">' + (r.hits && r.hits.length ? '　命中：' + esc(r.hits.slice(0, 3).join(' ')) : '') + '</span></span>' +
+        '<span class="si-m">' + esc(KP[r.id] ? KP[r.id].modFull : '') + '</span></button>';
+    }).join('');
+  }
+
   function suggest() {
     var q = $('#fQ').value.trim();
     if (!CLS || q.length < 4) { clearSug(); return; }
@@ -371,15 +473,8 @@
     if (!res.length) { clearSug(); return; }
     lastSug = res;
     var cur = $('#fKp').value;
-    $('#sugList').innerHTML = res.map(function (r, i) {
-      var on = cur === r.id || (!cur && i === 0);
-      return '<button type="button" class="sug-item' + (on ? ' on' : '') + '" data-kp="' + r.id + '">' +
-        '<span class="si-t">' + esc(r.title) + '<span class="si-hit">' + (r.hits.length ? '　命中：' + esc(r.hits.slice(0, 3).join(' ')) : '') + '</span></span>' +
-        '<span class="si-m">' + esc(r.modName) + '</span></button>';
-    }).join('');
+    $('#sugList').innerHTML = sugHtml(res, cur);
     $('#sugBox').hidden = false;
-
-    // 用户没手动选过，就默认取第一个
     if (!manualKp && res[0]) $('#fKp').value = res[0].id;
   }
 
@@ -389,7 +484,7 @@
     var kp = $('#fKp').value;
     if (!q) { toast('题干不能为空'); $('#fQ').focus(); return; }
     if (!kp) { toast('选一个归属知识点'); $('#fKp').focus(); return; }
-    var m = {
+    store.mistakes.push({
       id: uid(),
       q: q,
       kp: kp,
@@ -398,11 +493,9 @@
       note: $('#fNote').value.trim(),
       fixed: 0,
       ts: Date.now()
-    };
-    store.mistakes.push(m);
+    });
     save();
 
-    // 重置（保留知识点，方便连记同一类）
     $('#fQ').value = '';
     $('#fSrc').value = '';
     $('#fNote').value = '';
@@ -413,6 +506,303 @@
     renderHeader();
     toast('已归入「' + kpTitle(kp) + '」');
     go('list');
+  }
+
+  /* ==================================================
+     拍照切题
+     ================================================== */
+  var scanItems = [];      // {sid, cv, y0, y1, blob, url, text, kp}
+  var scanBusy = false;
+
+  function scanEls() { return $$('#scanList .qb'); }
+
+  function refreshScan() {
+    $('#scanNote').hidden = !scanItems.length;
+    $('#btnSaveAll').style.display = scanItems.length > 1 ? 'block' : 'none';
+  }
+
+  /* 行投影：找出题目之间的空白带 */
+  function segmentPage(cv, opts) {
+    var W = cv.width, H = cv.height;
+    var d = cv.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, W, H).data;
+    var ink = new Uint32Array(H);
+    for (var y = 0; y < H; y++) {
+      var off = y * W * 4, c = 0;
+      for (var x = 0; x < W; x++) {
+        var i = off + x * 4;
+        var g = (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000;
+        if (g < 168) c++;
+      }
+      ink[y] = c;
+    }
+    var blankMin = Math.max(2, Math.round(W * 0.006));
+    var minGap = Math.max(12, Math.round(H * (opts && opts.minGap ? opts.minGap : 0.016)));
+
+    var gaps = [], s = -1;
+    for (var y2 = 0; y2 < H; y2++) {
+      var blank = ink[y2] <= blankMin;
+      if (blank) { if (s < 0) s = y2; }
+      else if (s >= 0) { if (y2 - s >= minGap) gaps.push([s, y2]); s = -1; }
+    }
+    if (s >= 0 && H - s >= minGap) gaps.push([s, H]);
+
+    var bounds = [0];
+    gaps.forEach(function (g) {
+      var mid = Math.round((g[0] + g[1]) / 2);
+      if (mid > H * 0.015 && mid < H * 0.985) bounds.push(mid);
+    });
+    bounds.push(H);
+    bounds.sort(function (a, b) { return a - b; });
+
+    var minH = Math.max(20, Math.round(H * 0.018));
+    var blocks = [];
+    for (var j = 0; j < bounds.length - 1; j++) {
+      var a = bounds[j], b = bounds[j + 1];
+      if (b - a < minH) continue;
+      // 去掉块内首尾空白
+      var top = -1, bot = -1;
+      for (var k = a; k < b; k++) {
+        if (ink[k] > blankMin) { if (top < 0) top = k; bot = k; }
+      }
+      if (top < 0) continue;
+      blocks.push({ y0: top, y1: bot + 1 });
+    }
+    if (!blocks.length) blocks.push({ y0: 0, y1: H });
+    return blocks;
+  }
+
+  function cropFrom(cv, y0, y1) {
+    var pad = 6;
+    var a = Math.max(0, y0 - pad), b = Math.min(cv.height, y1 + pad);
+    var c2 = document.createElement('canvas');
+    c2.width = cv.width;
+    c2.height = b - a;
+    c2.getContext('2d').drawImage(cv, 0, a, cv.width, b - a, 0, 0, cv.width, b - a);
+    return new Promise(function (res) {
+      c2.toBlob(function (bl) { res({ blob: bl, y0: a, y1: b }); }, 'image/jpeg', 0.82);
+    });
+  }
+
+  function loadBitmap(file) {
+    return new Promise(function (res, rej) {
+      if (window.createImageBitmap) {
+        createImageBitmap(file).then(res).catch(rej);
+        return;
+      }
+      var img = new Image();
+      var u = URL.createObjectURL(file);
+      img.onload = function () { res(img); URL.revokeObjectURL(u); };
+      img.onerror = rej;
+      img.src = u;
+    });
+  }
+
+  function handleImages(files) {
+    if (scanBusy) return;
+    scanBusy = true;
+    var list = Array.prototype.slice.call(files);
+    $('#scanNote').hidden = false;
+    $('#scanNote').firstElementChild.textContent = '正在切题，' + list.length + ' 张图…';
+
+    var chain = Promise.resolve();
+    list.forEach(function (f) {
+      chain = chain.then(function () {
+        return loadBitmap(f).then(function (bmp) {
+          var scale = Math.min(1, 1280 / bmp.width);
+          var W = Math.round(bmp.width * scale);
+          var H = Math.round(bmp.height * scale);
+          var cv = document.createElement('canvas');
+          cv.width = W;
+          cv.height = H;
+          cv.getContext('2d').drawImage(bmp, 0, 0, W, H);
+          var blocks = segmentPage(cv);
+          return blocks.reduce(function (p, bl) {
+            return p.then(function () {
+              return cropFrom(cv, bl.y0, bl.y1).then(function (r) {
+                scanItems.push({
+                  sid: rid('s'), cv: cv, y0: r.y0, y1: r.y1,
+                  blob: r.blob, url: URL.createObjectURL(r.blob), text: '', kp: ''
+                });
+              });
+            });
+          }, Promise.resolve());
+        }).catch(function () { toast('有一张图读不出来，跳过'); });
+      });
+    });
+
+    chain.then(function () {
+      scanBusy = false;
+      renderScan();
+      var n = scanItems.length;
+      if (n) toast('切出 ' + n + ' 块，逐块填关键词即可归类');
+      else toast('没切出内容，换一张清晰点的图');
+    });
+  }
+
+  function renderScan() {
+    var h = scanItems.map(function (it, i) {
+      var dim = it.cv ? (it.cv.width + '×' + (it.y1 - it.y0)) : '文字题';
+      return '<article class="qb" data-sid="' + it.sid + '">' +
+        '<div class="qb-top">' +
+        '<span class="qb-no">' + (i + 1) + '</span>' +
+        '<span class="qb-dim">' + dim + '</span>' +
+        '<span class="qb-tools">' +
+        (i > 0 ? '<button class="mini" type="button" data-act="merge">↑合并上一块</button>' : '') +
+        (it.cv ? '<button class="mini" type="button" data-act="split">拆开</button>' : '') +
+        '<button class="mini del" type="button" data-act="drop">移除</button>' +
+        '</span></div>' +
+        (it.url ? '<img class="qb-img" src="' + it.url + '" data-zoom="1" alt="题图">' : '') +
+        '<div class="qb-body">' +
+        '<textarea class="qb-q" rows="' + (it.cv ? 2 : 4) + '" placeholder="抄一句题干 / 关键词，例如「椭圆 离心率 求方程」——填了就能自动归类">' + esc(it.text) + '</textarea>' +
+        '<div class="sug-list" data-sugs="' + it.sid + '" style="margin-top:9px">' + sugHtml(sugFor(it), it.kp) + '</div>' +
+        '<div class="qb-foot">' +
+        '<select data-kpsel="' + it.sid + '">' + kpOptions(it.kp) + '</select>' +
+        '<button class="mini blue" type="button" data-act="save">存入</button>' +
+        '</div></div></article>';
+    }).join('');
+
+    $('#scanList').innerHTML = h;
+    refreshScan();
+  }
+
+  function sugFor(it) {
+    if (!CLS || (it.text || '').trim().length < 4) return [];
+    return CLS.rank(it.text, 3);
+  }
+
+  function findScan(sid) {
+    for (var i = 0; i < scanItems.length; i++) if (scanItems[i].sid === sid) return scanItems[i];
+    return null;
+  }
+
+  function saveScanItem(sid) {
+    var it = findScan(sid);
+    if (!it) return;
+    var q = (it.text || '').trim();
+    if (!q) { toast('先写一句题干或关键词，才能归类'); return; }
+    if (!it.kp) { toast('选一个知识点'); return; }
+    var m = {
+      id: uid(), q: q, kp: it.kp, why: '',
+      src: $('#scanSrc').value.trim(), note: '', fixed: 0, ts: Date.now()
+    };
+    var imgId = rid('i');
+    IMG.put(imgId, it.blob).then(function () {
+      m.img = imgId;
+    }).catch(function () {}).then(function () {
+      store.mistakes.push(m);
+      save();
+      dropScan(sid);
+      renderHeader();
+      toast('已归入「' + kpTitle(m.kp) + '」');
+    });
+  }
+
+  function dropScan(sid) {
+    for (var i = 0; i < scanItems.length; i++) {
+      if (scanItems[i].sid === sid) {
+        URL.revokeObjectURL(scanItems[i].url);
+        scanItems.splice(i, 1);
+        break;
+      }
+    }
+    renderScan();
+  }
+
+  function mergeUp(sid) {
+    var idx = scanItems.findIndex(function (x) { return x.sid === sid; });
+    if (idx <= 0) return;
+    var cur = scanItems[idx], prev = scanItems[idx - 1];
+    if (cur.cv !== prev.cv) { toast('跨页的两块不能合并'); return; }
+    var y0 = Math.min(prev.y0, cur.y0), y1 = Math.max(prev.y1, cur.y1);
+    cropFrom(prev.cv, y0, y1).then(function (r) {
+      URL.revokeObjectURL(prev.url);
+      URL.revokeObjectURL(cur.url);
+      prev.y0 = r.y0; prev.y1 = r.y1; prev.blob = r.blob;
+      prev.url = URL.createObjectURL(r.blob);
+      prev.text = [prev.text, cur.text].filter(Boolean).join('\n');
+      scanItems.splice(idx, 1);
+      renderScan();
+    });
+  }
+
+  function splitBlock(sid) {
+    var it = findScan(sid);
+    if (!it) return;
+    var sub = document.createElement('canvas');
+    var h = it.y1 - it.y0;
+    sub.width = it.cv.width;
+    sub.height = h;
+    sub.getContext('2d').drawImage(it.cv, 0, it.y0, it.cv.width, h, 0, 0, it.cv.width, h);
+    var parts = segmentPage(sub, { minGap: 0.008 });
+    if (parts.length < 2) { toast('这一块切不开，试着整块存或换张图'); return; }
+    var idx = scanItems.indexOf(it);
+    var made = [];
+    var chain = parts.reduce(function (p, bl) {
+      return p.then(function () {
+        var full = { y0: it.y0 + bl.y0, y1: it.y0 + bl.y1 };
+        return cropFrom(it.cv, full.y0, full.y1).then(function (r) {
+          made.push({
+            sid: rid('s'), cv: it.cv, y0: r.y0, y1: r.y1,
+            blob: r.blob, url: URL.createObjectURL(r.blob), text: '', kp: ''
+          });
+        });
+      });
+    }, Promise.resolve());
+    chain.then(function () {
+      URL.revokeObjectURL(it.url);
+      scanItems.splice.apply(scanItems, [idx, 1].concat(made));
+      renderScan();
+      toast('拆成 ' + made.length + ' 块');
+    });
+  }
+
+  function splitWholeText(txt) {
+    var s = String(txt || '').replace(/\r/g, '').replace(/\u00a0/g, ' ').trim();
+    if (!s) { toast('先把题目文字贴进来'); return; }
+    var lines = s.split('\n');
+    // 主切分：1. / 1、/ 1）/ 第1题 —— 小问「（1）」不单独成题
+    var RE_MAIN = /^\s*(?:\d{1,2}\s*[.、．)）](?!\d)|第\s*\d{1,2}\s*题)/;
+    // 没有主题号（整卷都是小问）时才退回用「（1）」切
+    var RE_SUB = /^\s*[(（]\s*\d{1,2}\s*[)）]/;
+
+    function markLines(re) {
+      var m = [];
+      lines.forEach(function (ln, i) {
+        if (re.test(ln) && ln.trim().length > 2 && m.length < 120) m.push(i);
+      });
+      return m;
+    }
+
+    var marks = markLines(RE_MAIN);
+    if (marks.length < 2) marks = markLines(RE_SUB);
+
+    var chunks = [];
+    if (marks.length < 2) {
+      chunks = [s];
+    } else {
+      for (var i = 0; i < marks.length; i++) {
+        var a = marks[i];
+        var b = i + 1 < marks.length ? marks[i + 1] : lines.length;
+        var body = lines.slice(a, b).join('\n').trim();
+        if (body) chunks.push(body);
+      }
+      var head = lines.slice(0, marks[0]).join('\n').trim();
+      if (head && chunks.length) chunks[0] = head + '\n' + chunks[0];
+    }
+    chunks.forEach(function (q) {
+      var kp = '';
+      if (CLS && q.length >= 4) {
+        var r = CLS.rank(q, 3);
+        if (r[0]) kp = r[0].id;
+      }
+      scanItems.push({
+        sid: rid('s'), cv: null, y0: 0, y1: 0, blob: null, url: '',
+        text: q, kp: kp
+      });
+    });
+    $('#fWhole').value = '';
+    renderScan();
+    toast('切出 ' + chunks.length + ' 道题，已按内容预设知识点');
   }
 
   /* ---------- 备份 ---------- */
@@ -453,6 +843,7 @@
           why: m.why || '',
           src: m.src || '',
           note: m.note || '',
+          img: m.img || '',
           fixed: m.fixed ? 1 : 0,
           ts: m.ts || Date.now()
         };
@@ -463,9 +854,9 @@
       bar.hidden = false;
       bar.innerHTML = '读到 <b>' + clean.length + '</b> 道错题。怎么处理？' +
         '<div class="ib-act">' +
-        '<button type="button" id="impMerge" style="border:1px solid #d5e2ee;background:#fff;color:#1b3a5c">合并（去重）</button>' +
-        '<button type="button" id="impReplace" style="border:1px solid #eccdbc;background:#fff;color:#b4552d">覆盖现有</button>' +
-        '<button type="button" id="impCancel" style="border:1px solid #e6e1d7;background:#fff;color:#86868b">取消</button>' +
+        '<button type="button" id="impMerge">合并（去重）</button>' +
+        '<button type="button" id="impReplace">覆盖现有</button>' +
+        '<button type="button" id="impCancel">取消</button>' +
         '</div>';
       $('#impMerge').onclick = function () {
         var have = {};
@@ -495,6 +886,13 @@
     toast(msg);
   }
 
+  /* ---------- 图片放大 ---------- */
+  function openZoom(src) {
+    if (!src) return;
+    $('#zoomImg').src = src;
+    $('#zoom').hidden = false;
+  }
+
   /* ---------- 事件绑定 ---------- */
   function bind() {
     $('#tabs').addEventListener('click', function (e) {
@@ -502,7 +900,6 @@
       if (b) go(b.dataset.view);
     });
 
-    // 知识点：模块折叠 / 进入详情
     $('#kpList').addEventListener('click', function (e) {
       var head = e.target.closest('.mod-head');
       if (head) {
@@ -529,7 +926,6 @@
       renderKp();
     });
 
-    // 概览条：跳到对应模块
     $('#overview').addEventListener('click', function (e) {
       var r = e.target.closest('[data-jump]');
       if (!r) return;
@@ -540,58 +936,49 @@
       if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 
-    // 错题本操作
-    $('#misList').addEventListener('click', function (e) {
+    /* 错题本操作（列表 + 抽屉共用同一套逻辑） */
+    function misAction(e, refreshExtra) {
       var art = e.target.closest('.mis');
-      if (!art) return;
+      if (!art) return false;
       var id = art.dataset.id;
       var m = store.mistakes.filter(function (x) { return x.id === id; })[0];
-      if (!m) return;
+      if (!m) return false;
       var btn = e.target.closest('[data-act]');
       if (btn) {
         if (btn.dataset.act === 'fix') {
           m.fixed = m.fixed ? 0 : 1;
-          save(); renderHeader(); renderList(); renderOverview(); renderKp();
+          save(); renderHeader(); renderOverview(); renderKp(); renderList();
+          if (refreshExtra) refreshExtra(m.kp);
           toast(m.fixed ? '标记为已弄懂' : '重新放回待解决');
         } else if (btn.dataset.act === 'del') {
-          if (!confirm('删除这道错题？不可恢复。')) return;
+          if (!confirm('删除这道错题？不可恢复。')) return true;
+          var kp = m.kp;
+          if (m.img) IMG.del(m.img);
           store.mistakes = store.mistakes.filter(function (x) { return x.id !== id; });
-          save(); renderHeader(); renderList(); renderOverview(); renderKp();
+          save(); renderHeader(); renderOverview(); renderKp(); renderList();
+          if (refreshExtra) refreshExtra(kp);
           toast('已删除');
         }
-        return;
+        return true;
       }
+      var zoomEl = e.target.closest('[data-zoom]');
+      if (zoomEl && zoomEl.tagName === 'IMG' && zoomEl.src) { openZoom(zoomEl.src); return true; }
       if (e.target.closest('.mis-q')) art.classList.toggle('open');
-    });
+      return true;
+    }
 
-    // 抽屉内的操作
+    $('#misList').addEventListener('click', function (e) { misAction(e); });
+
     $('#sheet').addEventListener('click', function (e) {
       if (e.target.dataset.close) { closeSheet(); return; }
-      var art = e.target.closest('.mis');
-      var btn = e.target.closest('[data-act]');
-      if (art && btn) {
-        var id = art.dataset.id;
-        var m = store.mistakes.filter(function (x) { return x.id === id; })[0];
-        if (!m) return;
-        if (btn.dataset.act === 'fix') {
-          m.fixed = m.fixed ? 0 : 1;
-          save(); renderHeader(); renderOverview(); renderKp(); renderList();
-          openSheet(m.kp);   // 刷新抽屉
-        } else if (btn.dataset.act === 'del') {
-          if (!confirm('删除这道错题？不可恢复。')) return;
-          var kp = m.kp;
-          store.mistakes = store.mistakes.filter(function (x) { return x.id !== id; });
-          save(); renderHeader(); renderOverview(); renderKp(); renderList();
-          openSheet(kp);
-        }
-      }
+      misAction(e, function (kp) { if (kp && KP[kp]) openSheet(kp); else closeSheet(); });
     });
 
     $('#q2').addEventListener('input', renderList);
     $('#onlyTodo').addEventListener('change', renderList);
     $('#fKpFilter').addEventListener('change', renderList);
 
-    // 表单
+    /* 表单 */
     $('#fQ').addEventListener('input', function () {
       clearTimeout(sugTimer);
       sugTimer = setTimeout(suggest, 320);
@@ -602,9 +989,7 @@
       if (!b) return;
       $('#fKp').value = b.dataset.kp;
       manualKp = true;
-      Array.prototype.forEach.call(this.querySelectorAll('.sug-item'), function (x) {
-        x.classList.toggle('on', x === b);
-      });
+      $$('.sug-item', this).forEach(function (x) { x.classList.toggle('on', x === b); });
       toast('已归入「' + kpTitle(b.dataset.kp) + '」');
     });
     $('#whyList').addEventListener('click', function (e) {
@@ -615,7 +1000,94 @@
     });
     $('#addForm').addEventListener('submit', submitForm);
 
-    // 备份
+    /* 拍照切题 */
+    $('#fImgs').addEventListener('change', function () {
+      if (this.files && this.files.length) handleImages(this.files);
+      this.value = '';
+    });
+    $('#btnSplitText').addEventListener('click', function () {
+      splitWholeText($('#fWhole').value);
+    });
+
+    $('#scanList').addEventListener('input', function (e) {
+      var ta = e.target.closest('.qb-q');
+      if (!ta) return;
+      var art = ta.closest('.qb');
+      var it = findScan(art.dataset.sid);
+      if (!it) return;
+      it.text = ta.value;
+      clearTimeout(ta._t);
+      ta._t = setTimeout(function () {
+        var res = sugFor(it);
+        var box = $('[data-sugs="' + it.sid + '"]');
+        if (!box) return;
+        box.innerHTML = res.length ? sugHtml(res, it.kp) : '';
+        if (!it.kp && res[0]) {
+          it.kp = res[0].id;
+          var sel = $('[data-kpsel="' + it.sid + '"]');
+          if (sel) sel.value = res[0].id;
+          box.innerHTML = sugHtml(res, it.kp);
+        }
+      }, 300);
+    });
+
+    $('#scanList').addEventListener('change', function (e) {
+      var sel = e.target.closest('select[data-kpsel]');
+      if (!sel) return;
+      var it = findScan(sel.dataset.kpsel);
+      if (it) it.kp = sel.value;
+    });
+
+    $('#scanList').addEventListener('click', function (e) {
+      var art = e.target.closest('.qb');
+      if (!art) return;
+      var sid = art.dataset.sid;
+      var it = findScan(sid);
+      var sug = e.target.closest('.sug-item');
+      if (sug) {
+        if (it) it.kp = sug.dataset.kp;
+        var sel = $('[data-kpsel="' + sid + '"]');
+        if (sel) sel.value = sug.dataset.kp;
+        $$('.sug-item', art).forEach(function (x) { x.classList.toggle('on', x === sug); });
+        return;
+      }
+      var img = e.target.closest('[data-zoom]');
+      if (img && img.tagName === 'IMG') { openZoom(img.src); return; }
+      var btn = e.target.closest('[data-act]');
+      if (!btn) return;
+      if (btn.dataset.act === 'save') saveScanItem(sid);
+      else if (btn.dataset.act === 'drop') dropScan(sid);
+      else if (btn.dataset.act === 'merge') mergeUp(sid);
+      else if (btn.dataset.act === 'split') splitBlock(sid);
+    });
+
+    $('#btnSaveAll').addEventListener('click', function () {
+      var list = scanItems.slice();
+      var ok = 0, skip = 0;
+      var chain = list.reduce(function (p, it) {
+        return p.then(function () {
+          if (!(it.text || '').trim() || !it.kp) { skip++; return; }
+          var m = {
+            id: uid(), q: it.text.trim(), kp: it.kp, why: '',
+            src: $('#scanSrc').value.trim(), note: '', fixed: 0, ts: Date.now()
+          };
+          var imgId = rid('i');
+          return IMG.put(imgId, it.blob).then(function () { m.img = imgId; })
+            .catch(function () { })
+            .then(function () {
+              store.mistakes.push(m);
+              ok++;
+              dropScan(it.sid);
+            });
+        });
+      }, Promise.resolve());
+      chain.then(function () {
+        save(); renderHeader();
+        toast('存了 ' + ok + ' 道' + (skip ? '，' + skip + ' 块没填关键词先留着' : ''));
+      });
+    });
+
+    /* 备份 */
     $('#btnBackup').addEventListener('click', function () { $('#modal').hidden = false; });
     $('#btnCloseModal').addEventListener('click', function () {
       $('#modal').hidden = true;
@@ -623,7 +1095,7 @@
       $('#importBar').innerHTML = '';
     });
     $('#modal').addEventListener('click', function (e) {
-      if (e.target === this) { this.hidden = true; }
+      if (e.target === this) this.hidden = true;
     });
     $('#btnExport').addEventListener('click', exportJSON);
     $('#btnImport').addEventListener('click', function () { $('#fileIn').click(); });
@@ -634,6 +1106,7 @@
       if (!store.mistakes.length) { toast('本来就是空的'); return; }
       if (!confirm('清空全部 ' + store.mistakes.length + ' 道错题？建议先导出备份。')) return;
       if (!confirm('再确认一次：清空后无法恢复。')) return;
+      store.mistakes.forEach(function (m) { if (m.img) IMG.del(m.img); });
       store.mistakes = [];
       save();
       renderHeader(); renderOverview(); renderKp(); renderList();
@@ -641,18 +1114,20 @@
       toast('已清空');
     });
 
+    $('#zoom').addEventListener('click', function () { this.hidden = true; });
+
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') {
-        if (!$('#modal').hidden) { $('#modal').hidden = true; return; }
-        if (!$('#sheet').hidden) closeSheet();
-      }
+      if (e.key !== 'Escape') return;
+      if (!$('#zoom').hidden) { $('#zoom').hidden = true; return; }
+      if (!$('#modal').hidden) { $('#modal').hidden = true; return; }
+      if (!$('#sheet').hidden) closeSheet();
     });
   }
 
   /* ---------- 启动 ---------- */
   function init() {
     if (!DATA.length) {
-      document.body.innerHTML = '<p style="padding:40px;text-align:center;color:#b4552d">知识点数据 load 失败：检查 assets/data.js 是否存在。</p>';
+      document.body.innerHTML = '<p style="padding:40px;text-align:center;color:#a91f2f">知识点数据 load 失败：检查 assets/data.js 是否存在。</p>';
       return;
     }
     fillKpSelect();
@@ -661,8 +1136,16 @@
     renderOverview();
     renderKp();
     bind();
-    if (!canStore) $('#statline').innerHTML += ' <b style="color:#b4552d">（浏览器禁用了本地存储，本次记录不会保存）</b>';
+    // 支持直接用 #list / #scan / #add 打开某个视图
+    var hv = (location.hash || '').replace('#', '');
+    if (hv === 'list' || hv === 'scan' || hv === 'add' || hv === 'kp') go(hv);
+    if (!canStore) $('#statline').innerHTML += ' <b style="color:#f0a3a8">（浏览器禁用了本地存储，本次记录不会保存）</b>';
   }
 
   init();
+
+  /* 调试入口：加 ?__t=1 时把内部函数挂出来，方便在控制台/测试页验证切题算法 */
+  if (location.search.indexOf('__t=1') > -1) {
+    window.__mt = { segmentPage: segmentPage, cropFrom: cropFrom, splitWholeText: splitWholeText, store: store };
+  }
 })();

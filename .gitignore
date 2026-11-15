@@ -1,2 +1,5 @@
 .DS_Store
 *.log
+
+# 本地测试页，不发布
+_test/
