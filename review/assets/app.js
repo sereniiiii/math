@@ -265,7 +265,7 @@
         '<button class="mod-head" type="button" data-mod="' + m.id + '">' +
         '<span class="mod-name">' + esc(m.name) + '</span>' +
         '<span class="mod-cnt">' + (modWrong ? '错题 ' + modWrong + ' · ' : '') + items.length + ' 点</span>' +
-        '<i class="caret"></i></button><div class="mod-body">';
+        '<i class="caret"></i></button><div class="mod-body"><div class="mod-inner">';
 
       items.forEach(function (it) {
         var n = s.byKp[it.id] || 0;
@@ -274,7 +274,7 @@
           '<span class="kp-t">' + hl(it.t, kpKw) + '</span>' +
           '<span class="badge' + (n ? ' hot' : '') + '">' + (n || '·') + '</span></div>';
       });
-      h += '</div></section>';
+      h += '</div></div></section>';
     });
 
     $('#kpList').innerHTML = h || '<div class="empty">没有匹配的知识点</div>';
@@ -356,6 +356,9 @@
       '<h2 class="sh-title">' + esc(it.t) + '</h2>' +
       '<p class="sh-core">' + esc(it.core) + '</p>';
 
+    var figSvg = (window.MATH_FIG && window.MATH_FIG[it.id]) || '';
+    if (figSvg) h += '<figure class="fig">' + figSvg + '</figure>';
+
     if (it.keys && it.keys.length) {
       h += '<p class="sh-h">必背公式 / 要点</p><ul class="sh-keys">';
       it.keys.forEach(function (k) { h += '<li>' + esc(k) + '</li>'; });
@@ -396,14 +399,67 @@
   }
 
   /* ---------- 视图切换 ---------- */
-  function go(v) {
+  var REDUCE = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var curView = '';
+  var thumbEl = null;
+  var tabsNav = $('#tabs');
+  var mainEl = document.querySelector('main');
+
+  /* 滑块：跟着选中的 tab 平滑移动；窄屏切横向时自动换成左右滑 */
+  function syncThumb() {
+    if (!thumbEl) {
+      thumbEl = document.createElement('span');
+      thumbEl.className = 'thumb';
+      thumbEl.setAttribute('aria-hidden', 'true');
+      tabsNav.insertBefore(thumbEl, tabsNav.firstChild);
+    }
+    var cur = tabsNav.querySelector('.tab.on');
+    if (!cur) { thumbEl.style.opacity = '0'; return; }
+    var row = getComputedStyle(tabsNav).flexDirection === 'row';
+    thumbEl.style.opacity = '1';
+    if (row) {
+      thumbEl.style.width = cur.offsetWidth + 'px';
+      thumbEl.style.height = cur.offsetHeight + 'px';
+      thumbEl.style.transform = 'translateX(' + cur.offsetLeft + 'px)';
+    } else {
+      thumbEl.style.width = '';
+      thumbEl.style.height = cur.offsetHeight + 'px';
+      thumbEl.style.transform = 'translateY(' + cur.offsetTop + 'px)';
+    }
+  }
+
+  function applyView(v) {
     var views = { kp: 'view-kp', add: 'view-add', scan: 'view-scan', list: 'view-list' };
     Object.keys(views).forEach(function (k) { $('#' + views[k]).classList.toggle('hide', k !== v); });
-    $$('.tab').forEach(function (b) { b.classList.toggle('on', b.dataset.view === v); });
     if (v === 'list') renderList();
     if (v === 'kp') { renderOverview(); renderKp(); }
     if (v === 'scan') refreshScan();
+  }
+
+  function go(v) {
+    if (v === curView) return;
+    var first = !curView;
+    curView = v;
+
+    // 滑块先起步，不等视图重绘
+    $$('.tab').forEach(function (b) { b.classList.toggle('on', b.dataset.view === v); });
+    syncThumb();
+
+    if (first || REDUCE) {
+      applyView(v);
+      window.scrollTo(0, 0);
+      return;
+    }
+    mainEl.classList.add('leaving');
     window.scrollTo(0, 0);
+    setTimeout(function () {
+      applyView(v);
+      mainEl.classList.remove('leaving');
+      mainEl.classList.add('entering');
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { mainEl.classList.remove('entering'); });
+      });
+    }, 110);
   }
 
   /* ---------- 手动表单 ---------- */
@@ -1221,6 +1277,14 @@
   }
 
   init();
+
+  // 滑块首次定位不要有滑动动作
+  syncThumb();
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () { tabsNav.classList.remove('no-anim'); });
+  });
+  window.addEventListener('resize', function () { syncThumb(); });
+  window.addEventListener('load', function () { syncThumb(); });
 
   /* 调试入口：加 ?__t=1 时把内部函数挂出来，方便在控制台/测试页验证切题算法 */
   if (location.search.indexOf('__t=1') > -1) {

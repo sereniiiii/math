@@ -27,7 +27,7 @@
   --warn-soft: #fbf0f1;
   --star: #8a5a06;
 
-  --radius: 12px;
+  --radius: 14px;
   --side-w: 244px;
 
   --shadow-sm: 0 1px 2px rgba(16, 21, 27, 0.04);
@@ -35,8 +35,8 @@
 
   --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
           "Microsoft YaHei", "Segoe UI", sans-serif;
-  --font-serif: "Songti SC", "Source Han Serif SC", "Noto Serif SC", Georgia,
-                "Times New Roman", serif;
+  --font-display: "PingFang SC", "Hiragino Sans GB", -apple-system,
+                  BlinkMacSystemFont, "Microsoft YaHei", sans-serif;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -76,9 +76,9 @@ body {
 
 .side-head h1 {
   margin: 0;
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 2px;
   color: var(--ink);
   line-height: 1.4;
@@ -93,12 +93,12 @@ body {
 /* 进度 */
 .prog {
   background: var(--panel-2);
-  border-radius: 8px;
+  border-radius: 9px;
   padding: 10px 12px 11px;
 }
 .prog-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 .prog-top b {
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 21px;
   line-height: 1.1;
   color: var(--blue-deep);
@@ -122,7 +122,26 @@ body {
 }
 
 /* 左侧导航 */
-.tabs { display: flex; flex-direction: column; gap: 2px; }
+.tabs { position: relative; display: flex; flex-direction: column; gap: 2px; }
+
+/* 滑块：跟着选中项滑动，位置由 JS 写 transform */
+.thumb {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 0;
+  border-radius: 8px;
+  background: var(--blue-soft);
+  box-shadow: inset 3px 0 0 var(--blue-deep);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.34s cubic-bezier(0.22, 0.7, 0.28, 1),
+              height 0.24s cubic-bezier(0.22, 0.7, 0.28, 1),
+              width 0.24s cubic-bezier(0.22, 0.7, 0.28, 1),
+              opacity 0.2s ease;
+}
+.tabs.no-anim .thumb { transition: none; }
 
 .tab {
   position: relative;
@@ -133,7 +152,7 @@ body {
   width: 100%;
   padding: 8px 10px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
   font-family: inherit;
   font-size: 13.5px;
@@ -141,24 +160,16 @@ body {
   color: var(--ink-2);
   text-align: left;
   cursor: pointer;
-  transition: background 0.14s ease, color 0.14s ease;
+  transition: color 0.14s ease;
 }
 .tab:hover { background: var(--panel-2); }
 .tab[aria-selected="true"] {
-  background: var(--blue-soft);
+  background: transparent;
   color: var(--blue-deep);
   font-weight: 600;
 }
-.tab[aria-selected="true"]::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 7px;
-  bottom: 7px;
-  width: 3px;
-  border-radius: 0 2px 2px 0;
-  background: var(--blue-deep);
-}
+.tab[aria-selected="true"]:hover { background: transparent; }
+.tab[aria-selected="true"]::before { display: none; }
 .tab .n {
   font-size: 11px;
   color: var(--ink-3);
@@ -177,7 +188,7 @@ body {
   color: var(--ink);
   background: var(--panel-2);
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: 9px;
   padding: 8px 10px;
   outline: none;
   transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
@@ -241,6 +252,17 @@ main {
   padding: 30px 34px 56px;
 }
 
+/* 换册时的内容过渡：淡出下移 → 重绘 → 淡入 */
+#list {
+  transition: opacity 0.19s ease, transform 0.24s cubic-bezier(0.22, 0.7, 0.28, 1);
+}
+#list.leaving { opacity: 0; transform: translateY(9px); }
+#list.entering { opacity: 0; transform: translateY(-7px); transition: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .thumb, #list, .chap-body, .caret { transition: none !important; }
+}
+
 /* 册标题：衬线 + 竖向色条 + 延伸横线 */
 .book-title {
   display: flex;
@@ -249,9 +271,9 @@ main {
   margin: 30px 0 14px;
   padding-left: 12px;
   position: relative;
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 4px;
   color: var(--ink);
 }
@@ -302,9 +324,9 @@ main {
 
 .chap-name {
   flex: 1;
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 16.5px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.5;
   letter-spacing: 0.8px;
   color: #0c1117;
@@ -346,8 +368,15 @@ main {
 }
 .chap.open .caret { transform: rotate(180deg); }
 
-.chap-body { display: none; background: var(--panel); }
-.chap.open .chap-body { display: block; }
+/* 章折叠：0fr → 1fr 可动画，不用 JS 量高度 */
+.chap-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  background: var(--panel);
+  transition: grid-template-rows 0.36s cubic-bezier(0.22, 0.7, 0.28, 1);
+}
+.chap-inner { overflow: hidden; min-height: 0; }
+.chap.open .chap-body { grid-template-rows: 1fr; }
 
 /* 框内知识点：连续排版，只靠分割线和留白 */
 .card {
@@ -371,7 +400,7 @@ main {
   height: 18px;
   margin-top: 5px;
   border: 1.5px solid #c2ccda;
-  border-radius: 4px;
+  border-radius: 5px;
   background: #fff;
   cursor: pointer;
   position: relative;
@@ -426,7 +455,7 @@ main {
   color: var(--blue-deep);
   background: var(--blue-soft);
   border: 1px solid #d3e0f7;
-  border-radius: 3px;
+  border-radius: 4px;
   padding: 1px 6px;
   margin-right: 8px;
   vertical-align: 2px;
@@ -477,7 +506,7 @@ main {
   font-size: 14px;
   line-height: 1.8;
   color: #7d1725;
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 8px 8px 0;
 }
 .trap b {
   font-weight: 700;
@@ -521,7 +550,7 @@ main {
   padding: 13px 15px;
   background: var(--panel-2);
   border: 1px solid var(--line-2);
-  border-radius: 7px;
+  border-radius: 9px;
   line-height: 1.85;
 }
 .eg-body .q { color: var(--ink); margin-bottom: 8px; }
@@ -593,9 +622,14 @@ mark {
     font-size: 12.5px;
   }
   .tab[aria-selected="true"] {
-    background: var(--blue-deep);
+    background: transparent;
     border-color: var(--blue-deep);
     color: #fff;
+  }
+  .thumb {
+    border-radius: 99px;
+    background: var(--blue-deep);
+    box-shadow: none;
   }
   .tab[aria-selected="true"]::before { display: none; }
   .tab[aria-selected="true"] .n { color: rgba(255, 255, 255, 0.7); }
@@ -622,9 +656,27 @@ mark {
   .chap { break-inside: auto; border-color: #ccc; box-shadow: none; }
   .chap-head { background: #f2f2f2; box-shadow: none; }
   .chap-name { color: #000; }
-  .chap-body { display: block !important; }
+  .chap-body { grid-template-rows: 1fr !important; transition: none; }
+  .chap-inner { overflow: visible; }
   .card { break-inside: avoid; }
   .check { display: none; }
   details.eg { display: none; }
   body { background: #fff; }
 }
+
+/* ---------- 教材配图（内联 SVG） ---------- */
+.fig {
+  margin: 15px 0 0;
+  padding: 10px 12px 6px;
+  background: #fbfcfe;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+}
+.fig svg {
+  display: block;
+  width: 100%;
+  max-width: 600px;
+  height: auto;
+  margin: 0 auto;
+}
+.card.done .fig { opacity: 0.75; }

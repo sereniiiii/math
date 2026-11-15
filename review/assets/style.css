@@ -27,12 +27,13 @@
   --warn-soft: #fbf0f1;
   --star: #8a5a06;
 
-  --radius: 12px;
+  --radius: 14px;
   --side-w: 244px;
 
   --font: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
           "Microsoft YaHei", system-ui, sans-serif;
-  --font-serif: "Songti SC", "Source Han Serif SC", "Noto Serif SC", Georgia, serif;
+  --font-display: "PingFang SC", "Hiragino Sans GB", -apple-system,
+                  BlinkMacSystemFont, "Microsoft YaHei", sans-serif;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -67,9 +68,9 @@ body {
 
 .side-head h1 {
   margin: 0;
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 2px;
   color: var(--ink);
   line-height: 1.4;
@@ -95,7 +96,26 @@ body {
 .statline i { color: var(--warn); font-style: normal; font-weight: 700; }
 
 /* 左侧导航 */
-.tabs { display: flex; flex-direction: column; gap: 2px; }
+.tabs { position: relative; display: flex; flex-direction: column; gap: 2px; }
+
+/* 滑块：跟着选中项滑动，位置由 JS 写 transform */
+.thumb {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 0;
+  border-radius: 8px;
+  background: var(--blue-soft);
+  box-shadow: inset 3px 0 0 var(--blue-deep);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.34s cubic-bezier(0.22, 0.7, 0.28, 1),
+              height 0.24s cubic-bezier(0.22, 0.7, 0.28, 1),
+              width 0.24s cubic-bezier(0.22, 0.7, 0.28, 1),
+              opacity 0.2s ease;
+}
+.tabs.no-anim .thumb { transition: none; }
 
 .tab {
   position: relative;
@@ -105,7 +125,7 @@ body {
   width: 100%;
   padding: 8px 10px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
   font-family: inherit;
   font-size: 13.5px;
@@ -113,24 +133,16 @@ body {
   color: var(--ink-2);
   text-align: left;
   cursor: pointer;
-  transition: background 0.14s ease, color 0.14s ease;
+  transition: color 0.14s ease;
 }
 .tab:hover { background: var(--panel-2); }
 .tab.on {
-  background: var(--blue-soft);
+  background: transparent;
   color: var(--blue-deep);
   font-weight: 600;
 }
-.tab.on::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 7px;
-  bottom: 7px;
-  width: 3px;
-  border-radius: 0 2px 2px 0;
-  background: var(--blue-deep);
-}
+.tab.on:hover { background: transparent; }
+.tab.on::before { display: none; }
 .dot {
   display: none;
   margin-left: auto;
@@ -167,6 +179,13 @@ main {
   max-width: 900px;
   margin: 0 auto;
   padding: 28px 34px 56px;
+  transition: opacity 0.19s ease, transform 0.24s cubic-bezier(0.22, 0.7, 0.28, 1);
+}
+main.leaving { opacity: 0; transform: translateY(9px); }
+main.entering { opacity: 0; transform: translateY(-7px); transition: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .thumb, main { transition: none !important; }
 }
 
 .hide { display: none !important; }
@@ -182,9 +201,9 @@ main {
 }
 .panel-h {
   margin: 0 0 12px;
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.8px;
   color: var(--ink);
   padding-left: 11px;
@@ -214,7 +233,7 @@ main {
 .ov-num { flex: none; min-width: 0; }
 .ov-num b {
   display: block;
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 25px;
   line-height: 1.15;
   color: var(--ink);
@@ -305,9 +324,9 @@ main {
   margin: 22px 0 10px;
   padding-left: 12px;
   position: relative;
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 4px;
   color: var(--ink);
 }
@@ -354,9 +373,9 @@ main {
 .mod-head:active { background: #d8e2f1; }
 .mod-name {
   flex: 1;
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 15px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.5px;
   color: #0c1117;
   line-height: 1.45;
@@ -372,8 +391,15 @@ main {
   transition: transform 0.18s ease;
 }
 .mod.open .caret { transform: rotate(180deg); }
-.mod-body { display: none; background: var(--panel); }
-.mod.open .mod-body { display: block; }
+/* 章折叠：0fr → 1fr 可动画，不用 JS 量高度 */
+.mod-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  background: var(--panel);
+  transition: grid-template-rows 0.36s cubic-bezier(0.22, 0.7, 0.28, 1);
+}
+.mod-inner { overflow: hidden; min-height: 0; }
+.mod.open .mod-body { grid-template-rows: 1fr; }
 
 .kp-row {
   display: flex;
@@ -425,9 +451,9 @@ main {
 .sh-mod { margin: 0; font-size: 11.5px; color: var(--ink-3); letter-spacing: 0.3px; }
 .sh-title {
   margin: 4px 0 10px;
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 18px;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--ink);
   line-height: 1.4;
   letter-spacing: 0.5px;
@@ -482,10 +508,10 @@ main {
   margin: 0 0 7px 2px;
 }
 .mis-group-h b {
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 13.5px;
   color: var(--ink);
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.3px;
 }
 
@@ -696,7 +722,7 @@ input:focus, textarea:focus, select:focus {
 .drop:active { background: var(--panel-3); }
 .drop b {
   display: block;
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 15px;
   color: var(--blue-deep);
   letter-spacing: 0.5px;
@@ -728,7 +754,7 @@ input:focus, textarea:focus, select:focus {
   background: var(--blue-deep);
   color: #fff;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 22px;
   text-align: center;
   padding: 0 6px;
@@ -789,7 +815,7 @@ input:focus, textarea:focus, select:focus {
 }
 .modal-in h2 {
   margin: 0 0 8px;
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 16.5px;
   letter-spacing: 0.8px;
   color: var(--ink);
@@ -873,9 +899,14 @@ mark { background: #fff0a8; color: inherit; padding: 0 1px; border-radius: 2px; 
     font-size: 12.5px;
   }
   .tab.on {
-    background: var(--blue-deep);
+    background: transparent;
     border-color: var(--blue-deep);
     color: #fff;
+  }
+  .thumb {
+    border-radius: 99px;
+    background: var(--blue-deep);
+    box-shadow: none;
   }
   .tab.on::before { display: none; }
   .dot { margin-left: 5px; }
@@ -918,6 +949,17 @@ mark { background: #fff0a8; color: inherit; padding: 0 1px; border-radius: 2px; 
   .shell { display: block; }
   main { max-width: none; padding: 0; }
   body { background: #fff; }
-  .mod-body { display: block !important; }
+  .mod-body { grid-template-rows: 1fr !important; transition: none; }
+  .mod-inner { overflow: visible; }
   .mod, .mis { break-inside: avoid; box-shadow: none; }
 }
+
+/* ---------- 知识点配图（抽屉里） ---------- */
+.fig {
+  margin: 0 0 12px;
+  padding: 8px 10px 4px;
+  background: #fff;
+  border: 1px solid var(--line-2);
+  border-radius: 9px;
+}
+.fig svg { display: block; width: 100%; height: auto; }

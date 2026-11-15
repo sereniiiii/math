@@ -78,21 +78,65 @@
   }
 
   /* 顶部：按教材册筛选 */
-  function renderTabs() {
-    var html = '<button class="tab" role="tab" data-book="all">全部<span class="n">' +
-      allItems().filter(function (it) { return done[it.id]; }).length + '/' + allItems().length + '</span></button>';
+  var tabsBuilt = false;
+  var thumbEl = null;
+  var REDUCE = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function counts() {
+    var map = {};
+    var all = allItems();
+    map.all = { have: all.filter(function (it) { return done[it.id]; }).length, total: all.length };
     BOOKS.forEach(function (b) {
       var items = [];
       DATA.forEach(function (m) { if (m.book === b) items = items.concat(m.items); });
-      var have = items.filter(function (it) { return done[it.id]; }).length;
-      html += '<button class="tab" role="tab" data-book="' + esc(b) + '">' +
-        esc(b) + '<span class="n">' + have + '/' + items.length + '</span></button>';
+      map[b] = { have: items.filter(function (it) { return done[it.id]; }).length, total: items.length };
     });
-    tabsEl.innerHTML = html;
-    Array.prototype.forEach.call(tabsEl.querySelectorAll('.tab'), function (b) {
-      b.setAttribute('aria-selected', String(b.dataset.book === activeBook));
-    });
+    return map;
   }
+
+  function renderTabs() {
+    var c = counts();
+    // 只建一次，之后只更新数字和选中态，滑块节点才不会被重建
+    if (!tabsBuilt) {
+      var html = '<button class="tab" role="tab" data-book="all">全部<span class="n"></span></button>';
+      BOOKS.forEach(function (b) {
+        html += '<button class="tab" role="tab" data-book="' + esc(b) + '">' +
+          esc(b) + '<span class="n"></span></button>';
+      });
+      tabsEl.innerHTML = html;
+      thumbEl = document.createElement('span');
+      thumbEl.className = 'thumb';
+      thumbEl.setAttribute('aria-hidden', 'true');
+      tabsEl.insertBefore(thumbEl, tabsEl.firstChild);
+      tabsBuilt = true;
+    }
+    Array.prototype.forEach.call(tabsEl.querySelectorAll('.tab'), function (b) {
+      var k = b.dataset.book;
+      var d = c[k] || { have: 0, total: 0 };
+      b.querySelector('.n').textContent = d.have + '/' + d.total;
+      b.setAttribute('aria-selected', String(k === activeBook));
+    });
+    syncThumb();
+  }
+
+  /* 滑块：跟着选中的 tab 平滑移动；窄屏切横向时自动换成左右滑 */
+  function syncThumb() {
+    if (!thumbEl) return;
+    var cur = tabsEl.querySelector('.tab[aria-selected="true"]');
+    if (!cur) { thumbEl.style.opacity = '0'; return; }
+    var row = getComputedStyle(tabsEl).flexDirection === 'row';
+    thumbEl.style.opacity = '1';
+    if (row) {
+      thumbEl.style.width = cur.offsetWidth + 'px';
+      thumbEl.style.height = cur.offsetHeight + 'px';
+      thumbEl.style.transform = 'translateX(' + cur.offsetLeft + 'px)';
+    } else {
+      thumbEl.style.width = '';
+      thumbEl.style.height = cur.offsetHeight + 'px';
+      thumbEl.style.transform = 'translateY(' + cur.offsetTop + 'px)';
+    }
+  }
+
 
   function card(it, kw) {
     var isDone = !!done[it.id];
@@ -114,6 +158,9 @@
         '</div></details>';
     }
 
+    // 配图：教材扫描件没法单独裁图，改成内联 SVG 重画
+    var figSvg = (window.MATH_FIG && window.MATH_FIG[it.id]) || '';
+
     return '<article class="card' + (isDone ? ' done' : '') + '" data-id="' + it.id + '">' +
       '<div class="card-head">' +
         '<button class="check" type="button" aria-label="标记已掌握" aria-pressed="' + isDone + '"></button>' +
@@ -126,6 +173,7 @@
           '<p class="core">' + hl(it.core, kw) + '</p>' +
         '</div>' +
       '</div>' +
+      (figSvg ? '<figure class="fig">' + figSvg + '</figure>' : '') +
       (keys ? '<ul class="keys">' + keys + '</ul>' : '') +
       (it.trap ? '<div class="trap"><b>易错</b>　' + esc(it.trap) + '</div>' : '') +
       eg +
@@ -144,7 +192,9 @@
         '<span class="chap-prog" data-prog="' + m.id + '">' + n + '/' + m.items.length + '</span>' +
         '<i class="caret"></i>' +
       '</button>' +
-      '<div class="chap-body">' + items.map(function (it) { return card(it, kw); }).join('') + '</div>' +
+      '<div class="chap-body"><div class="chap-inner">' +
+        items.map(function (it) { return card(it, kw); }).join('') +
+      '</div></div>' +
       '</section>';
   }
 
@@ -243,11 +293,31 @@
     }
   });
 
+  /* 换册：内容先淡出→重绘→淡入，滑块同步滑过去 */
+  function swapRender() {
+    if (REDUCE) { render(); return; }
+    listEl.classList.add('leaving');
+    setTimeout(function () {
+      render();
+      listEl.classList.remove('leaving');
+      listEl.classList.add('entering');
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () { listEl.classList.remove('entering'); });
+      });
+    }, 110);
+  }
+
   tabsEl.addEventListener('click', function (e) {
     var b = e.target.closest('.tab');
     if (!b) return;
+    if (b.dataset.book === activeBook) return;
     activeBook = b.dataset.book;
-    render();
+    // 先让滑块起步，不等内容重绘
+    Array.prototype.forEach.call(tabsEl.querySelectorAll('.tab'), function (x) {
+      x.setAttribute('aria-selected', String(x.dataset.book === activeBook));
+    });
+    syncThumb();
+    swapRender();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   });
 
@@ -261,5 +331,12 @@
     render();
   });
 
+  window.addEventListener('resize', function () { syncThumb(); });
+  window.addEventListener('load', function () { syncThumb(); });
+
   render();
+  // 首次定位不要有滑动动作
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () { tabsEl.classList.remove('no-anim'); });
+  });
 })();
