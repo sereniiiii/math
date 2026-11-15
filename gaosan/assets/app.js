@@ -101,6 +101,11 @@
       return '<li>' + esc(k) + '</li>';
     }).join('');
 
+    // 把「1.1 集合的概念」拆成编号 + 标题，编号做成浅色标签，框内层次更清楚
+    var mm = /^([§\d][\d.\-—]*)\s+(.+)$/.exec(it.t);
+    var num = mm ? mm[1] : '';
+    var title = mm ? mm[2] : it.t;
+
     var eg = '';
     if (it.eg && it.eg.q) {
       eg = '<details class="eg"><summary>例题与解析</summary><div class="eg-body">' +
@@ -113,7 +118,11 @@
       '<div class="card-head">' +
         '<button class="check" type="button" aria-label="标记已掌握" aria-pressed="' + isDone + '"></button>' +
         '<div class="title-wrap">' +
-          '<div class="t">' + hl(it.t, kw) + (stars ? '<i class="stars">' + stars + '</i>' : '') + '</div>' +
+          '<div class="t">' +
+            (num ? '<span class="num">' + esc(num) + '</span>' : '') +
+            hl(title, kw) +
+            (stars ? '<i class="stars">' + stars + '</i>' : '') +
+          '</div>' +
           '<p class="core">' + hl(it.core, kw) + '</p>' +
         '</div>' +
       '</div>' +
