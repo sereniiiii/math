@@ -3,132 +3,139 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#171c24">
-<meta name="description" content="高三数学错题本：拍一张卷子自动切成多道题，每题归到对应知识点，数据自己备份。">
+<meta name="theme-color" content="#ffffff">
+<meta name="description" content="高三数学错题本：拍一张卷子自动切成多道题，每题归到对应知识点，导出备份带题图。">
 <title>数学错题本 · 高三复习</title>
 <link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
 
-<div class="nav">
-  <div class="nav-in">
-    <div class="brand">
+<div class="shell">
+
+  <aside class="side">
+    <div class="side-head">
       <h1>数学错题本</h1>
-      <span class="sub" id="sub">高三</span>
+      <p id="sub">高三</p>
     </div>
-    <button class="icon-btn" id="btnBackup" type="button">备份</button>
-  </div>
-  <p class="statline" id="statline"></p>
+
+    <p class="statline" id="statline"></p>
+
+    <nav class="tabs" id="tabs">
+      <button class="tab on" type="button" data-view="kp">知识点</button>
+      <button class="tab" type="button" data-view="add">＋ 记错题</button>
+      <button class="tab" type="button" data-view="scan">拍照切题</button>
+      <button class="tab" type="button" data-view="list">错题本<i class="dot" id="cntList"></i></button>
+    </nav>
+
+    <div class="side-bottom">
+      <button class="ghost" id="btnBackup" type="button">备份与恢复</button>
+      <a class="side-link" href="../">← 返回目录</a>
+    </div>
+  </aside>
+
+  <main>
+
+    <!-- ========== 概览 / 知识点分类 ========== -->
+    <section class="view" id="view-kp">
+      <div class="overview" id="overview"></div>
+
+      <div class="searchbar">
+        <input id="q" type="search" placeholder="搜知识点、公式、易错点" autocomplete="off">
+      </div>
+
+      <div class="chips">
+        <label class="chip"><input type="checkbox" id="onlyWrong"> 只看有错题的</label>
+        <button class="chip-btn" type="button" id="toggleAll">全部展开</button>
+      </div>
+
+      <div id="kpList"></div>
+    </section>
+
+    <!-- ========== 手动记一道错题 ========== -->
+    <section class="view hide" id="view-add">
+      <form id="addForm" autocomplete="off">
+        <label class="field">
+          <span class="lab">题干 <b class="req">*</b></span>
+          <textarea id="fQ" rows="5" placeholder="把题目抄进来，或只写「我错在哪」：&#10;例：已知 f(x)=x³−3x²+2，求单调区间与极值"></textarea>
+        </label>
+
+        <div class="sug-box" id="sugBox" hidden>
+          <p class="sug-head">自动判断属于（点一个确认，可改）</p>
+          <div class="sug-list" id="sugList"></div>
+        </div>
+
+        <label class="field">
+          <span class="lab">归属知识点</span>
+          <select id="fKp"></select>
+        </label>
+
+        <div class="field">
+          <span class="lab">错在哪</span>
+          <div class="why-list" id="whyList"></div>
+        </div>
+
+        <div class="field">
+          <span class="lab">来源</span>
+          <input id="fSrc" placeholder="2026 一模 / 五三 P32 / 周测三" type="text">
+        </div>
+
+        <label class="field">
+          <span class="lab">备注</span>
+          <input id="fNote" placeholder="当时卡在哪一步（可选）" type="text">
+        </label>
+
+        <button class="primary" type="submit">存进错题本</button>
+        <p class="tip">错题只存在这台设备的浏览器里。换手机或清缓存前，用左下角「备份与恢复」先导出（导出文件带题图）。</p>
+      </form>
+    </section>
+
+    <!-- ========== 拍照切题 ========== -->
+    <section class="view hide" id="view-scan">
+
+      <div class="panel">
+        <p class="panel-h">拍整张卷子，按空行自动切题</p>
+        <label class="drop" for="fImgs">
+          <b>选图片 / 拍照</b>
+          <span>可一次选多张；正着拍、光线均匀，切得最准</span>
+        </label>
+        <input id="fImgs" type="file" accept="image/*" multiple hidden>
+        <label class="field" style="margin:14px 0 0">
+          <span class="lab">这批题的来源（可选，存的时候一起记）</span>
+          <input id="scanSrc" type="text" placeholder="2026 一模 / 五三 P32 / 周测三">
+        </label>
+        <p class="tip">切得不准，用题块右上角的「合并 / 拆开」微调。图片只保存在这台设备。</p>
+      </div>
+
+      <div class="panel">
+        <p class="panel-h">有电子版文字？直接粘进来</p>
+        <textarea id="fWhole" rows="4" placeholder="把整卷文字粘进来，按「1. 2. 3.」自动切题，归类也更准"></textarea>
+        <button class="ghost" id="btnSplitText" type="button" style="margin:10px 0 0">按题号切分</button>
+      </div>
+
+      <div class="scan-note" id="scanNote" hidden>
+        <span>切出来的每道题，填一句题干关键词就能自动归类；留空就手动选知识点。</span>
+      </div>
+
+      <div id="scanList"></div>
+
+      <button class="primary" id="btnSaveAll" type="button" style="display:none">全部存进错题本</button>
+    </section>
+
+    <!-- ========== 错题本 ========== -->
+    <section class="view hide" id="view-list">
+      <div class="searchbar">
+        <input id="q2" type="search" placeholder="搜题干、备注" autocomplete="off">
+      </div>
+      <div class="chips">
+        <label class="chip"><input type="checkbox" id="onlyTodo"> 只看待解决</label>
+        <select id="fKpFilter" class="mini-select"></select>
+      </div>
+      <div id="misList"></div>
+    </section>
+
+  </main>
+
 </div>
-
-<nav class="tabs" id="tabs">
-  <button class="tab on" type="button" data-view="kp">知识点</button>
-  <button class="tab" type="button" data-view="add">＋ 记错题</button>
-  <button class="tab" type="button" data-view="scan">拍照切题</button>
-  <button class="tab" type="button" data-view="list">错题本<i class="dot" id="cntList"></i></button>
-</nav>
-
-<main>
-
-  <!-- ========== 概览 / 知识点分类 ========== -->
-  <section class="view" id="view-kp">
-    <div class="overview" id="overview"></div>
-
-    <div class="searchbar">
-      <input id="q" type="search" placeholder="搜知识点、公式、易错点" autocomplete="off">
-    </div>
-
-    <div class="chips">
-      <label class="chip"><input type="checkbox" id="onlyWrong"> 只看有错题的</label>
-      <button class="chip-btn" type="button" id="toggleAll">全部展开</button>
-    </div>
-
-    <div id="kpList"></div>
-  </section>
-
-  <!-- ========== 手动记一道错题 ========== -->
-  <section class="view hide" id="view-add">
-    <form id="addForm" autocomplete="off">
-      <label class="field">
-        <span class="lab">题干 <b class="req">*</b></span>
-        <textarea id="fQ" rows="5" placeholder="把题目抄进来，或只写「我错在哪」：&#10;例：已知 f(x)=x³−3x²+2，求单调区间与极值"></textarea>
-      </label>
-
-      <div class="sug-box" id="sugBox" hidden>
-        <p class="sug-head">自动判断属于（点一个确认，可改）</p>
-        <div class="sug-list" id="sugList"></div>
-      </div>
-
-      <label class="field">
-        <span class="lab">归属知识点</span>
-        <select id="fKp"></select>
-      </label>
-
-      <div class="field">
-        <span class="lab">错在哪</span>
-        <div class="why-list" id="whyList"></div>
-      </div>
-
-      <div class="field">
-        <span class="lab">来源</span>
-        <input id="fSrc" placeholder="2026 一模 / 五三 P32 / 周测三" type="text">
-      </div>
-
-      <label class="field">
-        <span class="lab">备注</span>
-        <input id="fNote" placeholder="当时卡在哪一步（可选）" type="text">
-      </label>
-
-      <button class="primary" type="submit">存进错题本</button>
-      <p class="tip">错题只存在这台设备的浏览器里。换手机或清缓存前，用右上角「备份」先导出。</p>
-    </form>
-  </section>
-
-  <!-- ========== 拍照切题 ========== -->
-  <section class="view hide" id="view-scan">
-
-    <div class="panel">
-      <p class="panel-h">拍整张卷子，按空行自动切题</p>
-      <label class="drop" for="fImgs">
-        <b>选图片 / 拍照</b>
-        <span>可一次选多张；正着拍、光线均匀，切得最准</span>
-      </label>
-      <input id="fImgs" type="file" accept="image/*" multiple hidden>
-      <label class="field" style="margin:14px 0 0">
-        <span class="lab">这批题的来源（可选，存的时候一起记）</span>
-        <input id="scanSrc" type="text" placeholder="2026 一模 / 五三 P32 / 周测三">
-      </label>
-      <p class="tip">切得不准，用题块右上角的「合并 / 拆开」微调。图片只保存在这台设备。</p>
-    </div>
-
-    <div class="panel">
-      <p class="panel-h">有电子版文字？直接粘进来</p>
-      <textarea id="fWhole" rows="4" placeholder="把整卷文字粘进来，按「1. 2. 3.」自动切题，归类也更准"></textarea>
-      <button class="ghost" id="btnSplitText" type="button" style="margin:10px 0 0">按题号切分</button>
-    </div>
-
-    <div class="scan-note" id="scanNote" hidden>
-      <span>切出来的每道题，填一句题干关键词就能自动归类；留空就手动选知识点。</span>
-    </div>
-
-    <div id="scanList"></div>
-
-    <button class="primary" id="btnSaveAll" type="button" style="display:none">全部存进错题本</button>
-  </section>
-
-  <!-- ========== 错题本 ========== -->
-  <section class="view hide" id="view-list">
-    <div class="searchbar">
-      <input id="q2" type="search" placeholder="搜题干、备注" autocomplete="off">
-    </div>
-    <div class="chips">
-      <label class="chip"><input type="checkbox" id="onlyTodo"> 只看待解决</label>
-      <select id="fKpFilter" class="mini-select"></select>
-    </div>
-    <div id="misList"></div>
-  </section>
-
-</main>
 
 <!-- 知识点详情抽屉 -->
 <div class="sheet" id="sheet" hidden>
@@ -140,12 +147,12 @@
 <div class="modal" id="modal" hidden>
   <div class="modal-in" role="dialog" aria-modal="true">
     <h2>备份与恢复</h2>
-    <p class="muted">错题和进度只存在这台设备的浏览器里。<b>换手机、清缓存、换浏览器之前，一定要先导出。</b></p>
-    <button class="primary" type="button" id="btnExport">导出 JSON 文件</button>
+    <p class="muted">错题、进度和题图都只存在这台设备里。<b>换手机、清缓存、换浏览器之前，一定要先导出。</b></p>
+    <button class="primary" type="button" id="btnExport">导出 JSON（含题图）</button>
     <button class="ghost" type="button" id="btnImport">从文件导入</button>
     <input type="file" id="fileIn" accept=".json,application/json" hidden>
     <div id="importBar" class="import-bar" hidden></div>
-    <p class="tip">导出的文件不含题图。换设备后图片题会显示成占位，题干文字仍在。</p>
+    <p class="tip">题图以 base64 存在 JSON 里，文件会比较大（每张约 0.2–0.6 MB）。导入时图片会一起还原。</p>
     <div class="danger-zone">
       <button class="danger" type="button" id="btnClear">清空全部错题</button>
     </div>

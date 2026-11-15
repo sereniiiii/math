@@ -198,8 +198,8 @@
     var s = stat();
     $('#sub').textContent = TOTAL_KP + ' 个知识点';
     $('#statline').innerHTML = s.total
-      ? '错题 <b>' + s.total + '</b> 道 · 待解决 <i>' + s.todo + '</i> · 已弄懂 <b>' + s.fixed + '</b> · 覆盖 <b>' + s.kps + '</b> 个知识点'
-      : '还没有错题。去「＋ 记错题」抄第一道，或「拍照切题」传一张卷子。';
+      ? '错题 <b>' + s.total + '</b> 道 · 待解决 <i>' + s.todo + '</i><br>已弄懂 <b>' + s.fixed + '</b> · 覆盖 <b>' + s.kps + '</b> 个知识点'
+      : '还没有错题。<br>去「＋ 记错题」或「拍照切题」开始。';
     var dot = $('#cntList');
     dot.textContent = s.todo || '';
     dot.className = 'dot' + (s.todo ? ' show' : '');
@@ -210,8 +210,8 @@
     var s = stat();
     var h = '<div class="ov-top">' +
       '<div class="ov-num"><b>' + s.total + '</b><span>道错题</span></div>' +
-      '<div class="ov-num warn"><b>' + s.todo + '</b><span>待解决</span></div>' +
-      '<div class="ov-num ok"><b>' + s.fixed + '</b><span>已弄懂</span></div>' +
+      '<div class="ov-num' + (s.todo ? ' warn' : '') + '"><b>' + s.todo + '</b><span>待解决</span></div>' +
+      '<div class="ov-num' + (s.fixed ? ' ok' : '') + '"><b>' + s.fixed + '</b><span>已弄懂</span></div>' +
       '<div class="ov-num"><b>' + s.kps + '</b><span>涉及知识点</span></div>' +
       '</div>';
 
@@ -806,24 +806,92 @@
   }
 
   /* ---------- 备份 ---------- */
+  function blobToDataURL(blob) {
+    return new Promise(function (res, rej) {
+      var fr = new FileReader();
+      fr.onload = function () { res(fr.result); };
+      fr.onerror = function () { rej(fr.error); };
+      fr.readAsDataURL(blob);
+    });
+  }
+
+  function dataURLToBlob(u) {
+    var m = /^data:([^;,]+)?(;base64)?,(.*)$/.exec(String(u || ''));
+    if (!m) return null;
+    try {
+      if (m[2]) {
+        var bin = atob(m[3]);
+        var arr = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+        return new Blob([arr], { type: m[1] || 'image/jpeg' });
+      }
+      return new Blob([decodeURIComponent(m[3])], { type: m[1] || 'image/jpeg' });
+    } catch (e) {
+      return null;
+    }
+  }
+
   function exportJSON() {
-    var payload = {
-      app: 'math-review',
-      v: 1,
-      exportedAt: new Date().toISOString(),
-      kpTotal: TOTAL_KP,
-      mistakes: store.mistakes
-    };
-    var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = '数学错题_' + ymd(new Date()) + '.json';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
-    toast('已导出 ' + store.mistakes.length + ' 道错题');
+    // 复制一份再挂 base64，绝不能写回 store（否则 localStorage 会被图片撑爆）
+    var out = store.mistakes.map(function (m) {
+      var c = {};
+      for (var k in m) c[k] = m[k];
+      return c;
+    });
+    var has = out.filter(function (m) { return m.img; });
+    if (has.length) toast('正在打包 ' + has.length + ' 张题图…');
+
+    var lost = 0;
+    var chain = has.reduce(function (p, m) {
+      return p.then(function () {
+        return IMG.get(m.img).then(function (b) {
+          if (!b) { lost++; return; }
+          return blobToDataURL(b).then(function (u) { m.imgData = u; });
+        }).catch(function () { lost++; });
+      });
+    }, Promise.resolve());
+
+    chain.then(function () {
+      var payload = {
+        app: 'math-review',
+        v: 2,
+        withImages: has.length > 0,
+        exportedAt: new Date().toISOString(),
+        kpTotal: TOTAL_KP,
+        mistakes: out
+      };
+      var blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = '数学错题_' + ymd(new Date()) + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+
+      var mb = (blob.size / 1048576).toFixed(1);
+      toast('已导出 ' + out.length + ' 道，' + mb + ' MB' +
+        (has.length ? '，含 ' + (has.length - lost) + ' 张题图' : '') +
+        (lost ? '（' + lost + ' 张读取失败）' : ''));
+    }).catch(function () {
+      toast('导出失败，可能图片太大，试试分几次导出');
+    });
+  }
+
+  // 导入时把 base64 还原成 Blob 存回 IndexedDB，拿到新的 imgId
+  function restoreImgs(list) {
+    return list.reduce(function (p, m) {
+      return p.then(function () {
+        if (!m.imgData) return;
+        var blob = dataURLToBlob(m.imgData);
+        delete m.imgData;
+        if (!blob) return;
+        var nid = rid('i');
+        return IMG.put(nid, blob).then(function () { m.img = nid; })
+          .catch(function () { });
+      });
+    }, Promise.resolve());
   }
 
   var pendingImport = null;
@@ -844,31 +912,41 @@
           src: m.src || '',
           note: m.note || '',
           img: m.img || '',
+          imgData: m.imgData || '',
           fixed: m.fixed ? 1 : 0,
           ts: m.ts || Date.now()
         };
       });
       if (!clean.length) { toast('文件里没有有效错题'); return; }
       pendingImport = clean;
+      var withImg = clean.filter(function (m) { return m.imgData; }).length;
       var bar = $('#importBar');
       bar.hidden = false;
-      bar.innerHTML = '读到 <b>' + clean.length + '</b> 道错题。怎么处理？' +
+      bar.innerHTML = '读到 <b>' + clean.length + '</b> 道错题' +
+        (withImg ? '，其中 <b>' + withImg + '</b> 道带题图' : '') + '。怎么处理？' +
         '<div class="ib-act">' +
         '<button type="button" id="impMerge">合并（去重）</button>' +
         '<button type="button" id="impReplace">覆盖现有</button>' +
         '<button type="button" id="impCancel">取消</button>' +
         '</div>';
       $('#impMerge').onclick = function () {
-        var have = {};
-        store.mistakes.forEach(function (m) { have[m.id] = 1; });
-        var added = 0;
-        clean.forEach(function (m) { if (!have[m.id]) { store.mistakes.push(m); have[m.id] = 1; added++; } });
-        save(); afterImport('合并完成，新增 ' + added + ' 道');
+        toast('正在还原题图…');
+        restoreImgs(clean).then(function () {
+          var have = {};
+          store.mistakes.forEach(function (m) { have[m.id] = 1; });
+          var added = 0;
+          clean.forEach(function (m) { if (!have[m.id]) { store.mistakes.push(m); have[m.id] = 1; added++; } });
+          save(); afterImport('合并完成，新增 ' + added + ' 道');
+        });
       };
       $('#impReplace').onclick = function () {
         if (!confirm('覆盖会清掉现有的 ' + store.mistakes.length + ' 道错题，确定？')) return;
-        store.mistakes = clean;
-        save(); afterImport('已覆盖为 ' + clean.length + ' 道');
+        toast('正在还原题图…');
+        restoreImgs(clean).then(function () {
+          store.mistakes.forEach(function (m) { if (m.img) IMG.del(m.img); });
+          store.mistakes = clean;
+          save(); afterImport('已覆盖为 ' + clean.length + ' 道');
+        });
       };
       $('#impCancel').onclick = function () {
         pendingImport = null; bar.hidden = true; bar.innerHTML = '';
@@ -1146,6 +1224,13 @@
 
   /* 调试入口：加 ?__t=1 时把内部函数挂出来，方便在控制台/测试页验证切题算法 */
   if (location.search.indexOf('__t=1') > -1) {
-    window.__mt = { segmentPage: segmentPage, cropFrom: cropFrom, splitWholeText: splitWholeText, store: store };
+    window.__mt = {
+      segmentPage: segmentPage,
+      cropFrom: cropFrom,
+      splitWholeText: splitWholeText,
+      store: store,
+      IMG: IMG,
+      exportJSON: exportJSON
+    };
   }
 })();
